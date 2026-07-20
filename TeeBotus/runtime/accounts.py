@@ -61,6 +61,7 @@ INSTANCE_STATE_ACCOUNT_ID = hashlib.sha512(b"TeeBotus:instance-state:v1").hexdig
 _ACCOUNT_IDENTITY_LOCK = threading.RLock()
 _ACCOUNT_IDENTITY_LOCK_STATE = threading.local()
 _ACCOUNT_MEMORY_LOCK = threading.RLock()
+_ACCOUNT_MEMORY_LOCKS: dict[str, threading.RLock] = {}
 _ACCOUNT_MEMORY_LOCK_STATE = threading.local()
 _ACCOUNT_MEMORY_BACKEND_LOCK = threading.RLock()
 _PROACTIVE_OUTBOX_LOCK = threading.RLock()
@@ -1431,6 +1432,8 @@ def account_memory_lock_for_root(
     lock_path = account_dir / lock_filename
     lock_key = os.path.realpath(os.fspath(lock_path))
     with _ACCOUNT_MEMORY_LOCK:
+        process_lock = _ACCOUNT_MEMORY_LOCKS.setdefault(lock_key, threading.RLock())
+    with process_lock:
         held_paths = getattr(_ACCOUNT_MEMORY_LOCK_STATE, "paths", None)
         if held_paths is None:
             held_paths = set()

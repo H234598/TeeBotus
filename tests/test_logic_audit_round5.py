@@ -161,6 +161,39 @@ def test_account_memory_appends_are_serialized_per_account(tmp_path, monkeypatch
     assert first.check_structured_memory_index(account_id).ok
 
 
+def test_account_memory_locks_allow_parallel_accounts(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    first_account = store.resolve_or_create_account(telegram_identity_key(1))
+    second_account = store.resolve_or_create_account(telegram_identity_key(2))
+    first_entered = threading.Event()
+    second_entered = threading.Event()
+    release_first = threading.Event()
+    errors: list[BaseException] = []
+
+    def hold(account_id: str, entered: threading.Event, *, wait_for_release: bool) -> None:
+        try:
+            with store.account_memory_lock(account_id):
+                entered.set()
+                if wait_for_release:
+                    release_first.wait(1)
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    first_thread = threading.Thread(target=hold, args=(first_account, first_entered), kwargs={"wait_for_release": True})
+    second_thread = threading.Thread(target=hold, args=(second_account, second_entered), kwargs={"wait_for_release": False})
+    first_thread.start()
+    assert first_entered.wait(1)
+    second_thread.start()
+    assert second_entered.wait(1)
+    release_first.set()
+    first_thread.join(timeout=1)
+    second_thread.join(timeout=1)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert errors == []
+
+
 def test_account_memory_health_check_waits_for_memory_writer_lock(tmp_path, monkeypatch):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
