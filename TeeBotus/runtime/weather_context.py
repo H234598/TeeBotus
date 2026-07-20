@@ -7046,6 +7046,21 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    same_city_residence_label = re.search(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:und|,)\s+"
+        r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:meldeadresse|meldeanschrift|meldesitz|wohnadresse|wohnanschrift|"
+        r"adresse|anschrift|wohnsitz)\b",
+        source,
+        re.IGNORECASE,
+    )
+    if same_city_residence_label:
+        first = _clean_city(same_city_residence_label.group("first"))
+        second = _clean_city(same_city_residence_label.group("second"))
+        if first and second and _city_comparison_key(first) == _city_comparison_key(second):
+            return False
     if re.search(
         r"(?:\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+|"
         r"(?:^|[.!?;,:]\s*)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
