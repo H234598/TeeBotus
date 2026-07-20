@@ -2124,3 +2124,25 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `516cc9ee`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-06
+
+- `teebotus.service` aktiv/running, `MainPID 2585598`.
+- Fremdstatusformen `wohnhaft`, `ansässig`, `gemeldet`, `registriert` und
+  `zuhause` werden nach Besitzerlabeln korrekt erkannt.
+- Besitzform `hat Stadt als Adresse` wird nicht als eigene Wohnstadt
+  übernommen.
+- Kontroll-Sweep mit 80 Kombinationen: `80/80` korrekt.
+- Neuer Zyklus: `7/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: Fremder Aufenthaltsstatus
+
+- Fremdmarker deckt Organisationen und Personen mit Status-/Adressverb an
+  verschiedenen Wortstellungen ab.
+- Prefixfilter hält generische City-Regexe bei diesen Formen auf eigener
+  Stadt fest.
+- Regressionen für `wohnhaft`, `gemeldet` und `hat ... als Adresse` ergänzt.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `660b46a9`.
