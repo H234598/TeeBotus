@@ -326,6 +326,10 @@ _TEMPORARY_RESIDENCE_QUALIFIER = (
     r"(?:bei|zu|auf)\s+besuch|gelegentlich|manchmal|"
     r"regelmäßig|regelmaessig|selten|geschäftlich|geschaeftlich|projektbedingt)"
 )
+_TEMPORARY_RESIDENCE_ADJECTIVE = (
+    r"(?:vorübergehend\w*|voruebergehend\w*|zeitweis\w*|temporär\w*|"
+    r"temporaer\w*|befristet\w*|kurzfristig\w*|vorläufig\w*|vorlaeufig\w*)"
+)
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
     r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|normalerweise|"
@@ -967,6 +971,7 @@ _DIRECT_RESIDENCE_BEFORE_TEMPORARY_LABEL = (
         rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})\s+ist\s+"
         rf"(?:{_TEMPORARY_RESIDENCE_QUALIFIER})\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:(?:{_TEMPORARY_RESIDENCE_ADJECTIVE})\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
         r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)"
@@ -978,11 +983,24 @@ _DIRECT_RESIDENCE_BEFORE_TEMPORARY_LABEL = (
         rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
         rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})\s+ist\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:(?:{_TEMPORARY_RESIDENCE_ADJECTIVE})\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
         r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)"
         r"\s*[,;]\s*(?:aber|doch|jedoch)?\s*"
         rf"{_TEMPORARY_RESIDENCE_QUALIFIER}"
+        r"(?=\s*[.!?]\s*$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
+        rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:{_TEMPORARY_RESIDENCE_ADJECTIVE})\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)"
         r"(?=\s*[.!?]\s*$)",
         re.IGNORECASE,
     ),
