@@ -7005,6 +7005,21 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         re.IGNORECASE,
     ):
         return True
+    for match in re.finditer(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]\s*"
+        r"(?P<residence>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,\s*"
+        r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
+        r"\s*[:=]\s*"
+        rf"{_LABELED_STREET_ADDRESS_CORE}\s*,\s*"
+        r"(?P<address>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        source,
+        re.IGNORECASE,
+    ):
+        residence = _clean_city(match.group("residence"))
+        address = _clean_city(match.group("address"))
+        if residence and address and _city_comparison_key(residence) != _city_comparison_key(address):
+            return True
     city_capture = (
         r"(?:\d{5}\s+)?"
         r"(?:auch\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
