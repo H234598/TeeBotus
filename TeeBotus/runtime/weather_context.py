@@ -6893,6 +6893,14 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
         tail,
     ):
         return False
+    if re.match(
+        r"(?i)\s*[,;]\s*(?:aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+bin\s+(?:ich|wir)\s+"
+        r"(?:beruflich|dienstlich|zum\s+arbeiten|zur\s+arbeit|zum\s+studieren|"
+        r"heute|gerade|nur\s+unterwegs)\b",
+        tail,
+    ):
+        return False
     boundary = re.search(r"[.!?;\n]", tail)
     segment = tail if boundary is None else tail[: boundary.start()]
     return bool(
