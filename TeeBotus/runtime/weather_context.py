@@ -8983,6 +8983,8 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
         return False
     boundary = re.search(r"[.!?;\n]", tail)
     segment = tail if boundary is None else tail[: boundary.start()]
+    if _has_temporal_residence_suffix_text(segment):
+        return False
     return bool(
         re.match(
             r"\s*(?:[,;]\s*(?:aber|doch|jedoch)\s+(?!nicht\b)(?:in|bei)\s+[A-ZÄÖÜ]|"
@@ -9158,6 +9160,7 @@ def _has_future_residence_suffix(source: str, city_end: int) -> bool:
 
 
 def _has_temporal_residence_suffix_text(value: str) -> bool:
+    fragment = re.split(r"(?<!\bSt)[.!?;\n]", str(value or ""), maxsplit=1, flags=re.IGNORECASE)[0]
     return bool(
         re.search(
             r"(?i)\s+(?:ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
@@ -9165,9 +9168,13 @@ def _has_temporal_residence_suffix_text(value: str) -> bool:
             r"sommer|winter|frühling|fruehling|herbst)|ab\s+\d{4}|"
             r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|"
             r"frueher|früher|ehemals|damals|vormalig\w*)\s*\.?$|"
-            r"(?:werde\w*|würde\w*|moechte\w*|möchte\w*|soll\w*|will\w*)"
-            r"(?:\s+(?:ich|wir))?\s*$)",
-            str(value or "").strip(),
+            r"(?:werde\w*|würde\w*|moechte\w*|möchte\w*|soll\w*|will\w*|"
+            r"könnte\w*|koennte\w*|dürfte\w*|duerfte\w*|müsste\w*|muesste\w*|"
+            r"plane\w*|beabsichtig\w*)\b|"
+            r"(?:habe|hat)\s+(?:ich|wir)\s+vor\b|"
+            r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|bald|später|spaeter|"
+            r"nächste\w*|naechste\w*)\b)",
+            fragment.strip(),
         )
     )
 
