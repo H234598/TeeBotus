@@ -2922,3 +2922,15 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `2bd4daf0`.
 - Neuer Zyklusstand: `13/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Optionales `nur` vor Zeitqualifier
+
+- `Mein Partner wohnt in Hamburg, ich nur vorübergehend in Berlin` wurde bisher
+  nicht erkannt, obwohl die Vollsatzform unterstützt wird.
+- Der bestehende Kurzsatz-Zeitqualifier akzeptiert jetzt optional `nur`.
+  `nur beruflich` bleibt durch die Aktivitätsfilter ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `b9a36ec2`.
+- Neuer Zyklusstand: `15/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
