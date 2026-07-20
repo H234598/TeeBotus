@@ -477,6 +477,9 @@ def test_extract_residence_city_from_s_ending_relation_forms() -> None:
 
 def test_extract_residence_city_from_inverted_location_forms() -> None:
     assert extract_residence_city("In Berlin wohne ich.") == "Berlin"
+    assert extract_residence_city("Dort, in Berlin, wohne ich.") == "Berlin"
+    assert extract_residence_city("Hier, in Berlin, wohne ich.") == "Berlin"
+    assert extract_residence_city("Da, in Berlin, lebe ich.") == "Berlin"
     assert extract_residence_city("Berlin, dort wohne ich.") == "Berlin"
     assert extract_residence_city("In Hamburg lebe ich.") == "Hamburg"
     assert extract_residence_city("Bei meinen Eltern in Berlin wohne ich.") == "Berlin"
