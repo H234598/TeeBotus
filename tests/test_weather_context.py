@@ -3902,6 +3902,83 @@ def test_city_change_rolls_back_memory_when_weather_state_write_fails(tmp_path) 
     ] == ["mem_residence_city_berlin"]
 
 
+def test_city_change_rolls_back_state_when_weather_state_write_fails_after_persist(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    provider = lambda city: f"{city}: 9 C"
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=provider,
+    )
+    original_write_agent_state = account_store.write_agent_state
+    failed = False
+
+    def write_then_fail(write_account_id: str, state: dict[str, object]) -> None:
+        nonlocal failed
+        weather_state = state.get("weather_context")
+        original_write_agent_state(write_account_id, state)
+        if not failed and isinstance(weather_state, dict) and weather_state.get("city") == "Potsdam":
+            failed = True
+            raise OSError("weather state write failed after persist")
+
+    with patch.object(account_store, "write_agent_state", side_effect=write_then_fail):
+        with pytest.raises(OSError, match="weather state write failed after persist"):
+            update_city_and_weather_context(
+                account_store,
+                account_id,
+                "Ich wohne in Potsdam.",
+                now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+                provider=provider,
+            )
+
+    assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
+    assert [
+        entry["id"]
+        for entry in account_store.read_memory_entries(account_id)
+        if str(entry.get("id") or "").startswith("mem_residence_city_")
+    ] == ["mem_residence_city_berlin"]
+
+
+def test_city_memory_rollback_failure_is_not_hidden(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 9 C",
+    )
+    original_append = account_store.append_structured_memory_entry
+    original_write_index = account_store.write_memory_index
+    append_finished = False
+
+    def append_then_fail(write_account_id: str, entry: dict[str, object], **kwargs: object) -> str:
+        nonlocal append_finished
+        memory_id = original_append(write_account_id, entry, **kwargs)
+        append_finished = True
+        raise OSError("residence append failed after persist")
+
+    def fail_index_rollback(write_account_id: str, index: dict[str, object]) -> None:
+        if append_finished:
+            raise OSError("residence index rollback failed")
+        original_write_index(write_account_id, index)
+
+    with patch.object(account_store, "append_structured_memory_entry", side_effect=append_then_fail):
+        with patch.object(account_store, "write_memory_index", side_effect=fail_index_rollback):
+            with pytest.raises(RuntimeError, match="residence memory rollback failed"):
+                update_city_and_weather_context(
+                    account_store,
+                    account_id,
+                    "Ich wohne in Potsdam.",
+                    now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+                    provider=lambda city: f"{city}: 9 C",
+                )
+
+
 def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

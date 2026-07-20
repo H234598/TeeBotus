@@ -5065,6 +5065,10 @@ WeatherProvider = Callable[[str], str]
 CityMemorySnapshot = tuple[list[dict[str, Any]], dict[str, Any]]
 
 
+class _ResidenceMemoryRollbackError(RuntimeError):
+    """Signal that residence-memory recovery did not complete safely."""
+
+
 def update_city_and_weather_context(
     account_store: AccountStore,
     account_id: str,
@@ -5095,6 +5099,7 @@ def _update_city_and_weather_context_unlocked(
 ) -> WeatherContextResult:
     resolved_now = _aware(now or datetime.now(timezone.utc))
     state = account_store.read_agent_state(account_id)
+    previous_state = deepcopy(state)
     weather_state = _ensure_weather_state(state)
     city = extract_residence_city(text)
     city_changed = False
@@ -5121,13 +5126,13 @@ def _update_city_and_weather_context_unlocked(
     current_city = str(weather_state.get("city") or "").strip()
     if not current_city:
         if city:
-            _write_weather_state(account_store, account_id, state, city_memory_snapshot)
+            _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(skipped_reason="no_city")
     last_checked = _parse_datetime(str(weather_state.get("last_checked_at") or ""))
     elapsed_since_check = resolved_now - last_checked if last_checked is not None else None
     if not city_changed and elapsed_since_check is not None and timedelta(0) <= elapsed_since_check < WEATHER_CHECK_INTERVAL:
         if city:
-            _write_weather_state(account_store, account_id, state, city_memory_snapshot)
+            _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(
             city=current_city,
             weather_text=str(weather_state.get("summary") or "").strip(),
@@ -5141,13 +5146,13 @@ def _update_city_and_weather_context_unlocked(
         weather_state["last_error"] = f"{type(exc).__name__}: {exc}"[:240]
         weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
         weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
-        _write_weather_state(account_store, account_id, state, city_memory_snapshot)
+        _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
     weather_state["summary"] = summary[:500]
     weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
     weather_state["last_error"] = ""
     weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
-    _write_weather_state(account_store, account_id, state, city_memory_snapshot)
+    _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
     return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
 
 
@@ -5155,25 +5160,31 @@ def _write_weather_state(
     account_store: AccountStore,
     account_id: str,
     state: dict[str, Any],
+    previous_state: dict[str, Any],
     city_memory_snapshot: CityMemorySnapshot | None,
 ) -> None:
     try:
         account_store.write_agent_state(account_id, state)
     except Exception:
-        if city_memory_snapshot is None:
-            raise
-        previous_rows, previous_index = city_memory_snapshot
         rollback_errors: list[Exception] = []
-        for restore in (
-            lambda: account_store.write_memory_entries(account_id, previous_rows),
-            lambda: account_store.write_memory_index(account_id, previous_index),
-        ):
+        restores: list[Callable[[], None]] = [
+            lambda: account_store.write_agent_state(account_id, previous_state),
+        ]
+        if city_memory_snapshot is not None:
+            previous_rows, previous_index = city_memory_snapshot
+            restores.extend(
+                (
+                    lambda: account_store.write_memory_entries(account_id, previous_rows),
+                    lambda: account_store.write_memory_index(account_id, previous_index),
+                )
+            )
+        for restore in restores:
             try:
                 restore()
             except Exception as rollback_exc:  # noqa: BLE001 - preserve failure visibility.
                 rollback_errors.append(rollback_exc)
         if rollback_errors:
-            raise RuntimeError("weather state write rollback failed; residence memory may be inconsistent") from rollback_errors[0]
+            raise RuntimeError("weather state rollback failed; account state or residence memory may be inconsistent") from rollback_errors[0]
         raise
 
 
@@ -5240,9 +5251,22 @@ def _append_city_memory(
                 account_store.append_structured_memory_entry(account_id, entry)
             return True, (previous_rows, deepcopy(previous_index))
         except Exception:
-            account_store.write_memory_entries(account_id, previous_rows)
-            account_store.write_memory_index(account_id, previous_index)
+            rollback_errors: list[Exception] = []
+            for restore in (
+                lambda: account_store.write_memory_entries(account_id, previous_rows),
+                lambda: account_store.write_memory_index(account_id, previous_index),
+            ):
+                try:
+                    restore()
+                except Exception as rollback_exc:  # noqa: BLE001 - expose incomplete recovery.
+                    rollback_errors.append(rollback_exc)
+            if rollback_errors:
+                raise _ResidenceMemoryRollbackError(
+                    "residence memory rollback failed; entries and index may be inconsistent"
+                ) from rollback_errors[0]
             raise
+    except _ResidenceMemoryRollbackError:
+        raise
     except Exception:
         return False, None
 
