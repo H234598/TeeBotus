@@ -930,6 +930,16 @@ _LABELLED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_DIRECT_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
+    r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+    rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*"
+    r"(?:[,;]\s*(?:(?:aber|doch|jedoch)\s+)?|\s+(?:aber|doch|jedoch|und)\s+)"
+    rf"{_TEMPORARY_RESIDENCE_QUALIFIER}\s+"
+    r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
+    r"(?:(?:in|bei)\s+)?"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
     r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
@@ -6228,12 +6238,16 @@ def extract_residence_city(text: str) -> str:
         or _has_conflicting_parenthetical_residence_labels(source)
     ):
         return ""
-    city = latest_match(CITY_CHANGE_PATTERNS)
-    if city:
-        if _has_conflicting_current_relative_residence(source):
-            return ""
-        return city
-    if _has_ambiguous_residence_targets(source):
+    has_direct_primary_temporary_residence = bool(
+        _DIRECT_PRIMARY_TEMPORARY_RESIDENCE.search(source)
+    )
+    if not has_direct_primary_temporary_residence:
+        city = latest_match(CITY_CHANGE_PATTERNS)
+        if city:
+            if _has_conflicting_current_relative_residence(source):
+                return ""
+            return city
+    if not has_direct_primary_temporary_residence and _has_ambiguous_residence_targets(source):
         return ""
     city = latest_match(CITY_PATTERNS)
     if city and _has_conflicting_current_relative_residence(source):
