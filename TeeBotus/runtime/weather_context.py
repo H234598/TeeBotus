@@ -1611,7 +1611,9 @@ _CITY_CHANGE_HISTORICAL_CITY_PRONOUN_CURRENT = re.compile(
     r"wohnadresse|wohnanschrift|adresse|anschrift|zuhause|zu\s+hause|daheim)\s*[,;]\s*"
     r"(?:jetzt|heute|nunmehr|nun|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
     r"inzwischen|mittlerweile|momentan)\s+"
-    r"(?:ist|bleibt|liegt|befindet\s+sich)\s+(?:es|er|sie)\s+(?:(?:in|bei)\s+)?"
+    r"(?:(?:ist|bleibt|liegt)\s+(?:es|er|sie)\s+(?:(?:in|bei)\s+)?|"
+    r"befindet\s+(?:es|er|sie)\s+sich\s+(?:(?:in|bei)\s+)?|"
+    r"befindet\s+sich\s+(?:es|er|sie)\s+(?:(?:in|bei)\s+)?)"
     rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
@@ -1620,10 +1622,24 @@ _CITY_CHANGE_HISTORICAL_LABEL_PRONOUN_CURRENT = re.compile(
     r"(?:früher\w*|frueher\w*|ehemalig\w*|vormalig\w*|damalig\w*|alt\w*|vorher|zuvor)\s+"
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
     r"wohnadresse|wohnanschrift|adresse|anschrift|zuhause|zu\s+hause|daheim)\s+"
-    r"(?:war|ist)\s+(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?:(?:war|ist)\s+)?(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
     r"(?:jetzt|heute|nunmehr|nun|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
     r"inzwischen|mittlerweile|momentan)\s+"
     r"(?:ist|bleibt|liegt|befindet\s+sich)\s+(?:es|er|sie)\s+(?:(?:in|bei)\s+)?"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_CITY_CHANGE_CITY_IS_HISTORICAL_LABEL_PRONOUN_CURRENT = re.compile(
+    rf"(?:^|[.!?;,:]\s*)(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})\s+"
+    rf"(?:ist|war)\s+(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?:früher\w*|frueher\w*|ehemalig\w*|vormalig\w*|damalig\w*|alt\w*|vorher|zuvor)\s+"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"wohnadresse|wohnanschrift|adresse|anschrift|zuhause|zu\s+hause|daheim)\s*[,;]\s*"
+    r"(?:jetzt|heute|nunmehr|nun|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+    r"inzwischen|mittlerweile|momentan)\s+"
+    r"(?:(?:ist|bleibt|liegt)\s+(?:es|er|sie)\s+(?:(?:in|bei)\s+)?|"
+    r"befindet\s+(?:es|er|sie)\s+sich\s+(?:(?:in|bei)\s+)?|"
+    r"befindet\s+sich\s+(?:es|er|sie)\s+(?:(?:in|bei)\s+)?)"
     rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
@@ -3731,6 +3747,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_ELLIPTICAL_CURRENT_LABEL,
     _CITY_CHANGE_HISTORICAL_CITY_PRONOUN_CURRENT,
     _CITY_CHANGE_HISTORICAL_LABEL_PRONOUN_CURRENT,
+    _CITY_CHANGE_CITY_IS_HISTORICAL_LABEL_PRONOUN_CURRENT,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
