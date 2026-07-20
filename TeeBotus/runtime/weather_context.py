@@ -9772,7 +9772,11 @@ def _has_non_residential_city_change_suffix(source: str, city_end: int) -> bool:
     return bool(
         re.match(
             r"(?i)\s*,?\s*(?:aber\s+)?(?:arbeite|studier|lern|schlaf|pendel|reise|besuch)\w*\b|"
-            r"\s*,?\s*(?:dort|hier)\s+(?:arbeite|studier|lern|schlaf|pendel|reise|besuch)\w*\b|"
+            r"\s*,?\s*(?:dort|hier)\s+(?:"
+            r"(?:arbeite|studier|lern|schlaf|pendel|reise|besuch|übernacht|uebernacht|"
+            r"halte|verbring|treff|fahr|geh|komm)\w*\b|"
+            r"(?:bin|sind)\s+(?:ich|wir)(?!\s+(?:wohnhaft|ansässig|ansaessig|gemeldet|"
+            r"registriert|zuhause|zu\s+hause|daheim)\b))|"
             r"\s*,?\s*wo\s+ich\s+(?:arbeite|studier|lern|schlaf|pendel|reise|besuch)\w*\b|"
             r"\s*,?\s*um\s+dort\s+zu\s+(?:arbeite|studier|lern|schlaf|pendel|reise|besuch)\w*\b",
             source[city_end:],
