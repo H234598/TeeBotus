@@ -2365,6 +2365,19 @@
 - Neuer Zyklus: `15/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Bekannte Slash-Stadt im Labelpfad
+
+- `Mein Wohnort ist Mühlhausen/Thüringen` und ASCII-Schreibweise wurden im
+  direkten Wohnortlabel nicht erkannt.
+- Dedizierter Matcher nutzt nur bekannte Compound-City-Namen. Unbekannte
+  Regionalangaben wie `Berlin/Brandenburg` bleiben dadurch ausgeschlossen.
+- Regressionen decken beide Schreibweisen sowie bestehende Compound-Städte ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `b931b2c3`.
+- Neuer Zyklus: `17/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
