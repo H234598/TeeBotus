@@ -3462,6 +3462,18 @@ CITY_CHANGE_PATTERNS = (
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:und|aber|doch|jedoch)\s+(?:(?:ich|wir)\s+)?(?:bin|sind)\s+"
+        r"(?:ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+        r"(?:jahr\w*|monat\w*|woche\w*)|ab\s+(?:morgen|uebermorgen|übermorgen|"
+        r"sommer|winter|frühling|fruehling|herbst)|ab\s+\d{4}|"
+        r"künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|beabsichtig\w*)\b\s+"
+        r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
+        re.IGNORECASE,
+    ),
     _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR,
     _CITY_BEFORE_RESIDENCE_ADDRESS_HAVE,
     _CITY_WITH_PARENTHETICAL_RESIDENCE_LABEL,
@@ -6244,7 +6256,8 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             r"(?i)^(?:(?:ich|wir)\s+)?(?:bin|sind)\s+"
             r"(?:jetzt|nun(?:mehr)?|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
             r"inzwischen|mittlerweile|seit\s+[^\s,;.!?]+|ab\s+(?:sofort|jetzt)|"
-            r"künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig)\b",
+            r"künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig|geplant\w*|"
+            r"beabsichtig\w*)\b",
             status_tail,
         ):
             return False

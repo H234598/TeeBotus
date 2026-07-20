@@ -4065,6 +4065,18 @@ def test_extract_residence_city_handles_temporal_label_forms() -> None:
     assert extract_residence_city("Wir wohnen in Berlin und sind seit zwei Jahren in Hamburg wohnhaft.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin und bin seit zwei Jahren in Hamburg wohnhaft.") == "Hamburg"
     assert extract_residence_city("Wir wohnen in Berlin und sind künftig in Hamburg wohnhaft.") == "Berlin"
+    for qualifier in (
+        "ab morgen",
+        "ab übermorgen",
+        "ab nächster Woche",
+        "ab 2027",
+        "zukünftig",
+        "geplant",
+        "beabsichtigt",
+    ):
+        assert extract_residence_city(
+            f"Ich wohne in Berlin und bin {qualifier} in Hamburg wohnhaft."
+        ) == "Berlin"
     assert extract_residence_city("Wir wohnen in Berlin und sind in Hamburg wohnhaft.") == ""
     assert extract_residence_city("Wir wohnen in Berlin und sind aktuell in Hamburg gemeldet.") == ""
     assert extract_residence_city("Wir wohnen in Berlin und in Hamburg ansässig.") == ""
