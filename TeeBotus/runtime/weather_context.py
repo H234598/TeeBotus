@@ -5646,12 +5646,23 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
         segment,
     ):
         return True
+    if re.search(
+        rf"(?i)\b(?:mein(?:e|en|em|er|es)?|unser(?:e|en|em|er|es)?)\s+"
+        rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
+        r"(?:ist|liegt|befindet\s+sich)\s+"
+        r"(?:(?:zuhause|zu\s+hause|daheim)\s+)?(?:in|bei)\s*$",
+        segment,
+    ):
+        return True
     return bool(
         re.search(
-            rf"(?i)\b(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
-            rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
-            r"(?:ist|liegt|befindet\s+sich)\s+"
-            r"(?:(?:zuhause|zu\s+hause|daheim)\s+)?(?:in|bei)\s*$",
+            rf"(?i)\b(?:der|die|das|ein(?:e|en|em|er|es)?)?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|meldeadresse|"
+            r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\s+"
+            r"(?:(?:von)\s+)?"
+            rf"(?:mein(?:e|en|em|er|es)?|unser(?:e|en|em|er|es)?)\s+"
+            r"(?:ist|liegt|befindet\s+sich)\s+(?:in|bei)\s*$",
             segment,
         )
     )
@@ -6501,6 +6512,22 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\s+"
         r")"
         r"(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+"
+        r"(?:der|die|das|ein(?:e|en|em|er|es)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|meldeadresse|"
+        r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\s+"
+        r"(?:(?:von)\s+)?"
+        rf"(?:mein(?:e|en|em|er|es)?|unser(?:e|en|em|er|es)?)\s+"
+        rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
+        r"(?:ist|liegt|befindet\s+sich)\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}",
         source,
         re.IGNORECASE,
     ):
