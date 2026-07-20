@@ -6002,6 +6002,12 @@ def extract_residence_city(text: str) -> str:
             flags=re.IGNORECASE,
         )
     source = re.sub(
+        rf"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s*\(\s*(?:{_REGION_NAME_PATTERN})\s*\)",
+        r"\g<city>",
+        source,
+        flags=re.IGNORECASE,
+    )
+    source = re.sub(
         r"\bfrankfurt\s+a\.\s*m\.(?=\s|[!?;,]|$)",
         "Frankfurt am Main",
         source,
