@@ -2756,6 +2756,25 @@ CITY_PATTERNS = (
     _QUALIFIED_RESIDENCE,
     _CURRENT_RESIDENCE_LABEL_CITY,
     re.compile(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
+        r"besuch\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:geburtsort|geburtsstadt|heimat|heimatstadt|herkunftsort|herkunftsstadt|"
+        r"studienort|universität|universitaet|uni)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
         rf"\({_PRIMARY_RESIDENCE_LABEL}\)(?=\s*(?:[.!?;,]|\b(?:und|sowie)\b|$))",
         re.IGNORECASE,
@@ -6768,6 +6787,27 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         ):
             return True
     if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
+        r"besuch\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:geburtsort|geburtsstadt|heimat|heimatstadt|herkunftsort|herkunftsstadt|"
+        r"studienort|universität|universitaet|uni)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
         rf"(?:(?:ich\s+)?{residence}\s+)?(?:in|bei)\s+",
         source,
@@ -6836,6 +6876,14 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
 
 def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
     tail = source[city_end:]
+    if re.match(
+        r"(?i)\s*[,;]\s*(?:aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
+        r"besuch\w*|übernacht\w*|uebernacht\w*)\b",
+        tail,
+    ):
+        return False
     boundary = re.search(r"[.!?;\n]", tail)
     segment = tail if boundary is None else tail[: boundary.start()]
     return bool(
