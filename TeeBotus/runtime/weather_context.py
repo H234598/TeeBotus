@@ -950,7 +950,7 @@ _SHORT_RESIDENCE_CLAUSE_SEPARATOR = (
     r"(?:[.!?]\s+|[,;]\s*(?:und|sowie|aber|doch|jedoch|während|waehrend)?\s*|"
     r"(?:und|sowie|aber|doch|jedoch|während|waehrend)\s+)"
 )
-_SHORT_RESIDENCE_SELF_QUALIFIER = rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER})\s+)?"
+_SHORT_RESIDENCE_SELF_QUALIFIER = rf"(?:(?:nur\s+)?(?:{_RESIDENCE_TIME_QUALIFIER})\s+)?"
 _SHORT_RESIDENCE_HOME_MARKER = (
     r"(?:bei\s+mir(?:\s+(?:zu\s+hause|zuhause|daheim))?|zu\s+hause|zuhause|daheim)"
 )
