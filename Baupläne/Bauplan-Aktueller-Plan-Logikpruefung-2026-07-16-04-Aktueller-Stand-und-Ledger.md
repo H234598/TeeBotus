@@ -2102,3 +2102,25 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `ef269e20`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-04
+
+- `teebotus.service` aktiv/running, `MainPID 2585598`.
+- Besitzkonstruktionen mit `hat ihre/seine Meldeadresse` und
+  `Firma ist in ... ansässig` werden als Fremdbezug getrennt.
+- Registeradress-Konfliktprüfung entfernt die daraus extrahierten fremden
+  Städte zentral, ohne echte eigene Adresskonflikte zu ignorieren.
+- Besitz-/Adress-Sweep mit 80 Varianten: `80/80` korrekt; fünf
+  Konfliktinvarianten zusätzlich geprüft.
+- Neuer Zyklus: `5/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: Besitzkonstruktionen
+
+- Fremdmarker erkennt Besitzer mit `hat ... Wohn-/Meldeadresse` sowie
+  `ist in/bei`.
+- Prefixfilter schützt City-Kandidaten bei Personen- und Organisationsbesitz.
+- Registersammler entfernt fremde Cities vor disjunktem Adressvergleich.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `516cc9ee`.
