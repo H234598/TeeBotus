@@ -951,12 +951,24 @@ _SHORT_RESIDENCE_CLAUSE_SEPARATOR = (
     r"(?:und|sowie|aber|doch|jedoch|während|waehrend)\s+)"
 )
 _SHORT_RESIDENCE_SELF_QUALIFIER = rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER})\s+)?"
+_SHORT_RESIDENCE_HOME_MARKER = (
+    r"(?:bei\s+mir(?:\s+(?:zu\s+hause|zuhause|daheim))?|zu\s+hause|zuhause|daheim)"
+)
+_SHORT_RESIDENCE_SELF_CLAUSE = (
+    rf"(?:(?:ich|wir)\s+{_SHORT_RESIDENCE_SELF_QUALIFIER}"
+    rf"(?:{_SHORT_RESIDENCE_HOME_MARKER}\s+(?:in|bei)\s+|(?:in|bei)\s+)|"
+    rf"{_SHORT_RESIDENCE_HOME_MARKER}\s+(?:in|bei)\s+)"
+)
+_SHORT_RESIDENCE_SELF_FIRST_CLAUSE = (
+    rf"\b(?:ich|wir)\s+{_SHORT_RESIDENCE_SELF_QUALIFIER}"
+    rf"(?:{_SHORT_RESIDENCE_HOME_MARKER}\s+(?:in|bei)\s+|(?:in|bei)\s+)"
+)
 _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY = re.compile(
     rf"\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
     r"(?:wohnt|wohnen|lebt|leben|ist|sind)\s+(?:in|bei)\s+"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
-    rf"(?:ich|wir)\s+{_SHORT_RESIDENCE_SELF_QUALIFIER}(?:in|bei)\s+"
+    rf"{_SHORT_RESIDENCE_SELF_CLAUSE}"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
 )
@@ -968,7 +980,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_CITY = re.compile(
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
-    rf"(?:ich|wir)\s+{_SHORT_RESIDENCE_SELF_QUALIFIER}(?:in|bei)\s+"
+    rf"{_SHORT_RESIDENCE_SELF_CLAUSE}"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
 )
@@ -978,7 +990,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_PRONOUN_CITY = re.compile(
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
-    rf"(?:ich|wir)\s+{_SHORT_RESIDENCE_SELF_QUALIFIER}(?:in|bei)\s+"
+    rf"{_SHORT_RESIDENCE_SELF_CLAUSE}"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
 )
@@ -997,7 +1009,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_POSSESSIVE_CITY = re.compile(
     re.IGNORECASE,
 )
 _SHORT_SELF_RESIDENCE_BEFORE_OTHER_PERSON_CITY = re.compile(
-    rf"\b(?:ich|wir)\s+{_SHORT_RESIDENCE_SELF_QUALIFIER}(?:in|bei)\s+"
+    rf"{_SHORT_RESIDENCE_SELF_FIRST_CLAUSE}"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
     rf"{_OTHER_PERSON_RESIDENCE_OWNER_REFERENCE}\s+"
