@@ -7606,27 +7606,39 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
         r"(?<!\d)(?<!\bSt)[.!?;\n]\s*", source[:match_start], flags=re.IGNORECASE
     )[-1]
     if re.search(
-        r"(?i)(?:\bkünft\w*|\bkuenft\w*|\bzukünft\w*|\bzukuenft\w*|\bgeplant\w*|\bplan\w*|\bbeabsichtig\w*|\bvorhab\w*)\s*$",
+        r"(?i)(?:\bkünft\w*|\bkuenft\w*|\bzukünft\w*|\bzukuenft\w*|\bgeplant\w*|\bplan\w*|\bbeabsichtig\w*|\bvorhab\w*)\s*[,;]?\s*$",
         match_sentence,
     ):
         return True
     clause = re.split(r"[,;]\s*", sentence)[-1]
+    if re.search(
+        r"(?i)(?:\bab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+        r"(?:jahr\w*|monat\w*|woche\w*)\b|\bab\s+\d{4}\b|"
+        r"\bab\s+(?:morgen|uebermorgen|übermorgen|sommer|winter|frühling|fruehling|herbst)\b|"
+        r"\bab\s+(?:dem\s+)?\d{1,2}\.\d{1,2}\.\d{2,4}\b|"
+        r"\bab\s+(?:dem\s+)?(?:\d{1,2}\.\s+)?(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|"
+        r"sommer|winter|frühling|fruehling|herbst|weihnachten|ostern|neujahr)\b|"
+        r"\bam\s+\d{1,2}\.\d{1,2}\.\d{2,4}\b|"
+        r"\bam\s+(?:\d{1,2}\.\s+)?(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember)\b|"
+        r"\b(?:im|in)\s+(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|"
+        r"sommer|winter|frühling|fruehling|herbst)\b|\bzu\s+(?:weihnachten|ostern|neujahr)\b|"
+        r"\bseit\s+(?:morgen|uebermorgen|übermorgen)\b|\b(?:demnächst|demnaechst)\b|\bbald\b|"
+        r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
+        r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|plan\w*|beabsichtig\w*|vorhab\w*)\b)",
+        clause,
+    ):
+        return True
+    if re.search(
+        r"(?i)\b(?:werd(?:e|en|et|est)?|soll(?:e|en|t|te|ten)?|"
+        r"müsste|muesste|könnte|koennte|dürfte|duerfte|würde|wuerde)\b"
+        r"[^.!?;\n]*$",
+        clause,
+    ):
+        return True
     return bool(
         re.search(
-            r"(?i)(?:\bab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
-            r"(?:jahr\w*|monat\w*|woche\w*)\b|\bab\s+\d{4}\b|"
-            r"\bab\s+(?:morgen|uebermorgen|übermorgen|sommer|winter|frühling|fruehling|herbst)\b|"
-            r"\bab\s+(?:dem\s+)?\d{1,2}\.\d{1,2}\.\d{2,4}\b|"
-            r"\bab\s+(?:dem\s+)?(?:\d{1,2}\.\s+)?(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|"
-            r"sommer|winter|frühling|fruehling|herbst|weihnachten|ostern|neujahr)\b|"
-            r"\bam\s+\d{1,2}\.\d{1,2}\.\d{2,4}\b|"
-            r"\bam\s+(?:\d{1,2}\.\s+)?(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember)\b|"
-            r"\b(?:im|in)\s+(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|"
-            r"sommer|winter|frühling|fruehling|herbst)\b|\bzu\s+(?:weihnachten|ostern|neujahr)\b|"
-            r"\bseit\s+(?:morgen|uebermorgen|übermorgen)\b|\b(?:demnächst|demnaechst)\b|\bbald\b|"
-            r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
-            r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|plan\w*|beabsichtig\w*|vorhab\w*)\b)",
-            clause,
+            r"(?i)\b(?:ich|wir)\s+h(?:abe|aben)\s+vor\b[^.!?;\n]*$",
+            sentence,
         )
     )
 
@@ -7654,7 +7666,9 @@ def _has_uncertain_residence_prefix(source: str, match_start: int) -> bool:
         re.search(
             r"(?i)(?:^|[,;]\s*)(?:ich|wir)\s+(?:glaube|denke|vermute)\b[^.!?;\n]*$|"
             r"(?:^|[,;]\s*)ich\s+nehme\s+an\b[^.!?;\n]*$|"
-            r"(?:^|[,;]\s*)soweit\s+ich\s+wei(?:ß|ss)\b[^.!?;\n]*$",
+            r"(?:^|[,;]\s*)soweit\s+ich\s+wei(?:ß|ss)\b[^.!?;\n]*$|"
+            r"(?:^|[,;]\s*)(?:ich|wir)?\s*(?:könnte|koennte|soll(?:e|en|t|te|ten)?|"
+            r"müsste|muesste|dürfte|duerfte|würde|wuerde)\b[^.!?;\n]*$",
             sentence,
         )
     )
