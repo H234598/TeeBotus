@@ -8092,6 +8092,32 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         if city:
             registered_address_cities.add(_city_comparison_key(city))
     for match in re.finditer(
+        rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+        rf"(?:(?:heute|jetzt|nun|derzeit|inzwischen|mittlerweile|ab\s+sofort|"
+        rf"{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)+"
+        r"(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        source,
+        re.IGNORECASE,
+    ):
+        city_start = match.start("city")
+        city_end = match.end("city")
+        city = _clean_city(match.group("city"))
+        if (
+            not city
+            or re.search(r"\d", city)
+            or _has_historical_residence_prefix(source, match.start())
+            or _has_future_residence_prefix(source, match.start(), city_start)
+            or _has_uncertain_residence_prefix(source, match.start())
+            or _has_historical_residence_suffix(source, city_end)
+            or _has_future_residence_suffix(source, city_end)
+            or _has_uncertain_residence_suffix(source, city_end)
+        ):
+            continue
+        registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
         rf"(?:[.!?;,:]\s*(?!(?:und|aber|doch|jedoch|sondern)\b)|"
         rf"\b(?:und|aber|doch|jedoch|sondern)\s+)"
         rf"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+(?:ist\s+)?"
