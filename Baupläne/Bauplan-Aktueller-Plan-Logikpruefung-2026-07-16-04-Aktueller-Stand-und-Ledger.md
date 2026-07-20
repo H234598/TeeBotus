@@ -2285,3 +2285,18 @@
   gruen. Code-Commit: `adef402d`.
 - Neuer Zyklus: `3/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
+
+- Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
+  `bei Hamburg gemeldet` und `meine offizielle Meldung ist Hamburg` wurden bei
+  einem abweichenden expliziten Wohnort nicht als Registrierungsziel erfasst.
+- Ein gemeinsamer, kontextbegrenzter Collector sammelt diese Formen jetzt als
+  offizielle Adresse. Fremdpersonen bleiben ausgeschlossen; `wohnhaft` bleibt
+  außerhalb dieses Collectors.
+- Regressionen decken vier Kurzformen, gleiche Stadt und fremde Person ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `e592c61d`.
+- Neuer Zyklus: `5/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
