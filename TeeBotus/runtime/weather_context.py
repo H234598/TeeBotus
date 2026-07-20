@@ -6416,6 +6416,15 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         return False
     if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
+        r"(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:wohnt|leben|lebt|wohnen)\s+"
+        rf"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+{_OTHER_PERSON_RESIDENCE_LABEL}\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:ist|war|bleibt|liegt|befindet\s+sich)\s+"
         r"(?:(?:der|die|das|ein(?:e|en|em|er|es)?)\s+)?"
