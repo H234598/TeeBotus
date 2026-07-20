@@ -2781,3 +2781,15 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `db6558c3`.
 - Neuer Zyklusstand: `11/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Doppelpunkt bei Label-first-Fremdperson
+
+- Angaben wie `Der Wohnort meiner Frau: Hamburg, ich in Berlin` wurden bisher
+  nicht als eigener Wohnort erkannt.
+- Der bestehende Label-first-Matcher akzeptiert jetzt zusätzlich `:` und `=`
+  zwischen Fremdpersonenlabel und Fremdstadt. Verbformen bleiben unverändert.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `257 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `2b6dad61`.
+- Neuer Zyklusstand: `13/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
