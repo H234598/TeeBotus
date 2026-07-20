@@ -1887,3 +1887,9 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `62b47989`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-09
+
+- `systemctl --user restart teebotus.service` erfolgreich.
+- Service aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Neuer Zyklus: `1/20` Commit seit diesem Restart. Kein Push.
