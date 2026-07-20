@@ -4362,7 +4362,7 @@ class BotTests(unittest.TestCase):
                 )
 
             self.assertIsNotNone(record)
-            self.assertEqual(len(decision_calls), 2)
+            self.assertEqual(len(decision_calls), 1)
             self.assertIn("Stadt/Wohnort: Hamburg", context)
 
     def test_voice_model_command_persists_openai_voice_alias(self) -> None:

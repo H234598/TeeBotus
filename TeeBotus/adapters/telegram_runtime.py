@@ -842,6 +842,7 @@ class UserMemoryRecord:
     prompt_text: str
     selected_ids: tuple[str, ...]
     account_id: str = ""
+    weather_context_prepared: bool = False
 
 
 @dataclass(frozen=True)
@@ -3066,6 +3067,7 @@ def _prepare_user_memory(
             message,
             adapter_slot=_telegram_api_adapter_slot(api),
         )
+        weather_context_prepared = False
         try:
             update_city_and_weather_context(
                 user_memory_store,
@@ -3073,6 +3075,7 @@ def _prepare_user_memory(
                 query_text,
                 structured_decision_runner=structured_decision_runner,
             )
+            weather_context_prepared = True
         except (AccountStoreError, OSError, ValueError):
             LOGGER.exception("Failed to update Telegram weather context.")
         selection = user_memory_store.select_structured_memory(
@@ -3087,6 +3090,7 @@ def _prepare_user_memory(
             prompt_text=selection.prompt_text,
             selected_ids=selection.selected_ids,
             account_id=account_id,
+            weather_context_prepared=weather_context_prepared,
         )
     except (AccountStoreError, OSError, AttributeError):
         LOGGER.exception("Failed to prepare user memory.")
@@ -3342,6 +3346,8 @@ def _prepare_weather_context(
     if not account_id:
         return ""
     try:
+        if user_memory.weather_context_prepared:
+            return weather_context_text(user_memory_store, account_id)
         update_city_and_weather_context(
             user_memory_store,
             account_id,
