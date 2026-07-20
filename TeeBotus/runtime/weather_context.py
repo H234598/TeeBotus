@@ -4270,7 +4270,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
-        r"(?:adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)\s*"
+        r"(?:adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,|[-–—])\s*"
         rf"(?:{_LABELED_STREET_ADDRESS})?(?:\d{{5}}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
         r"(?=\s*[.!?;,]|$)",
