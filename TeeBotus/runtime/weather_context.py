@@ -10162,13 +10162,16 @@ def _clean_city(value: str) -> str:
 
 
 def _city_id_token(city: str) -> str:
-    normalized = re.sub(r"\s+", "_", city.strip().casefold())
+    casefolded = city.strip().casefold()
+    normalized = re.sub(r"\s+", "_", casefolded)
     safe = re.sub(r"[^a-z0-9_]+", "", normalized)
-    if any(ord(char) > 127 for char in normalized):
+    if (
+        any(ord(char) > 127 for char in casefolded)
+        or len(normalized) > 48
+        or re.search(r"[^a-z0-9\s_]", casefolded)
+        or "_" in casefolded
+    ):
         digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
-        return f"{safe[:31]}_{digest}" if safe else digest
-    if len(normalized) > 48:
-        digest = hashlib.sha256(city.encode("utf-8")).hexdigest()[:16]
         return f"{safe[:31]}_{digest}"
     return safe or hashlib.sha256(city.encode("utf-8")).hexdigest()[:16]
 

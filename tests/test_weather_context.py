@@ -1670,6 +1670,15 @@ def test_city_id_token_keeps_unicode_city_names_distinct() -> None:
     assert len(first_token) <= 48
 
 
+def test_city_id_token_disambiguates_lossy_ascii_normalization() -> None:
+    cities = ("Neu-Ulm", "Neuulm", "O-Fallon", "OFallon", "L'Aquila", "LAquila")
+    tokens = [_city_id_token(city) for city in cities]
+
+    assert len(set(tokens)) == len(cities)
+    assert _city_id_token("A" * 49 + " Berlin") == _city_id_token("a" * 49 + " berlin")
+    assert all(len(token) <= 48 for token in tokens)
+
+
 @pytest.mark.parametrize(
     "payload",
     (
