@@ -908,14 +908,23 @@ _LABELED_COMPOUND_RESIDENCE_CITY = re.compile(
     re.IGNORECASE,
 )
 _GENITIVE_RESIDENCE_ADDRESS_CITY = re.compile(
-    r"\b(?:die|eine|meine|unsere)?\s*"
-    r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
-    r"(?:meines|unseres)\s+"
+    r"\b(?:die|der|das|eine|meine|unsere)?\s*"
+    r"(?:adresse|wohnadresse|wohnanschrift|anschrift|ort)\s+"
+    r"(?:meines|meiner|unseres|unserer)\s+"
     r"(?:wohnort(?:s|es)?|wohnsitz(?:es)?|hauptwohnsitz(?:es)?|"
-    r"lebensmittelpunkt(?:s|es)?)\s+"
+    r"lebensmittelpunkt(?:s|es)?|wohnung|zuhauses?)\s+"
     r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
     r"(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_RELATIVE_RESIDENCE_REGISTRATION_CITY = re.compile(
+    r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+    r"(?:dort|da|hier)\s*,?\s*wo\s+"
+    r"(?:meine|unsere)\s+"
+    r"(?:meldeadresse|meldeanschrift|meldesitz)\s+(?:in|bei)\s+"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+    r"(?:ist|liegt|befindet\s+sich)\b",
     re.IGNORECASE,
 )
 _TEMPORAL_REGISTERED_CITY = re.compile(
@@ -2873,6 +2882,7 @@ CITY_PATTERNS = (
     _LABELED_COMPOUND_RESIDENCE_CITY,
     _INVERTED_REGISTERED_CITY,
     _GENITIVE_RESIDENCE_ADDRESS_CITY,
+    _RELATIVE_RESIDENCE_REGISTRATION_CITY,
     re.compile(
         rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*{_OTHER_PERSON_LOCATION_LABEL}\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
@@ -7118,6 +7128,27 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     )
     if same_city_reference_label and _clean_city(same_city_reference_label.group("city")):
         return False
+    same_city_genitive_address = re.search(
+        r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+und\s+"
+        r"(?:die|der|das|eine|meine|unsere)?\s*"
+        r"(?:adresse|wohnadresse|wohnanschrift|anschrift|ort)\s+"
+        r"(?:meines|meiner|unseres|unserer)\s+"
+        r"(?:wohnort(?:s|es)?|wohnsitz(?:es)?|hauptwohnsitz(?:es)?|"
+        r"lebensmittelpunkt(?:s|es)?|wohnung|zuhauses?)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+        r"(?:auch|ebenfalls|ebenso|gleichfalls)?\s*"
+        r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        source,
+        re.IGNORECASE,
+    )
+    if same_city_genitive_address:
+        first = _clean_city(same_city_genitive_address.group("first"))
+        second = _clean_city(same_city_genitive_address.group("second"))
+        if first and second and _city_comparison_key(first) == _city_comparison_key(second):
+            return False
     if re.search(
         r"(?:\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+|"
         r"(?:^|[.!?;,:]\s*)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
