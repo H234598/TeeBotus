@@ -71,24 +71,21 @@ def decide_bibliothekar_query(text: str, *, model_runner: ModelRunner | None = N
         return BibliothekarQueryDecision(should_search=False, query="", confidence=1.0, reason_short="Empty text or slash command", source="classic")
     if _command_name(value) and "youtube-transkript" not in normalized and "youtube transcript" not in normalized:
         return BibliothekarQueryDecision(should_search=False, query="", confidence=1.0, reason_short="Slash command without generated context", source="classic")
-    explicit_needles = (
-        "bibliothek",
-        "bibliothekar",
-        "buch",
-        "buecher",
-        "bücher",
-        "quelle",
-        "quellen",
-        "zitat",
-        "zitier",
-        "literatur",
-        "dokument",
-        "pdf",
-        "epub",
-        "was sagt",
-        "steht dazu",
+    explicit_needles = ("bibliothek", "bibliothekar")
+    source_terms = {"buch", "buecher", "quelle", "quellen", "literatur", "dokument", "pdf", "epub"}
+    normalized_words = set(normalized.split())
+    source_question = (
+        ("was sagt" in normalized and bool(normalized_words & source_terms))
+        or ("steht dazu" in normalized and bool(normalized_words & source_terms))
+        or "in den quellen" in normalized
+        or "aus den quellen" in normalized
+        or "quelle angeben" in normalized
+        or "genaue quelle" in normalized
+        or "literaturstelle" in normalized
+        or "zitiere" in normalized
+        or "zitier" in normalized
     )
-    if any(needle in normalized for needle in explicit_needles):
+    if any(needle in normalized for needle in explicit_needles) or source_question:
         return BibliothekarQueryDecision(should_search=True, query=value, confidence=0.9, reason_short="Explicit library/source wording", source="classic")
     if model_runner is not None:
         try:

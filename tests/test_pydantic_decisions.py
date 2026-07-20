@@ -126,6 +126,20 @@ def test_bibliothekar_query_decision_classic_and_model_runner_paths() -> None:
     assert calls and calls[0][1] is BibliothekarQueryDecision
 
 
+def test_bibliothekar_single_source_word_is_left_to_model() -> None:
+    calls = []
+
+    def fake_model_runner(prompt, schema):
+        calls.append((prompt, schema))
+        return {"should_search": False, "query": "", "confidence": 0.93, "reason_short": "metaphor", "source": "model"}
+
+    decision = decide_bibliothekar_query("Ich bin eine Quelle der Ruhe.", model_runner=fake_model_runner)
+
+    assert decision.should_search is False
+    assert decision.source == "model"
+    assert calls and calls[0][1] is BibliothekarQueryDecision
+
+
 def test_bibliothekar_query_decision_ignores_low_confidence_model_search() -> None:
     decision = decide_bibliothekar_query(
         "Vielleicht gibt es irgendwo etwas dazu?",
