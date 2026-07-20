@@ -1192,6 +1192,18 @@ _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE = re.compile(
     r"(?:wohnhaft|ansässig|ansaessig|beheimatet|gemeldet|registriert|zu\s+hause|zuhause|daheim)\s+bin(?:d)?)\b)",
     re.IGNORECASE,
 )
+_CITY_BEFORE_PLAIN_RELATIVE_RESIDENCE = re.compile(
+    r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*"
+    r"(?:,|;|:|[-–—])\s*(?:in\s+(?:der|dem|welcher)|worin)\s+"
+    r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
+    re.IGNORECASE,
+)
+_CITY_WITH_PLAIN_RELATIVE_RESIDENCE = re.compile(
+    r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*"
+    r"(?:,|;|:|[-–—])\s*(?:in\s+(?:der|dem|welcher)|worin)\s+"
+    r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RELATIVE_RESIDENCE_LABEL = re.compile(
     r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:,|;|:|[-–—])\s*"
     r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+"
@@ -3385,6 +3397,8 @@ CITY_PATTERNS = (
     _CITY_WITH_PARENTHETICAL_RESIDENCE_LABEL,
     _CITY_BEFORE_RELATIVE_RESIDENCE_LABEL,
     _CITY_BEFORE_RELATIVE_COMPANION_RESIDENCE,
+    _CITY_BEFORE_PLAIN_RELATIVE_RESIDENCE,
+    _CITY_WITH_PLAIN_RELATIVE_RESIDENCE,
     _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
@@ -7816,7 +7830,8 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
     current_targets: set[str] = set()
     relative_pattern = re.compile(
         r"\b(?:es\s+ist\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s+"
-        r"wo\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
+        r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+(?:ich|wir)\s+"
+        r"(?:wohne|wohnen|lebe|leben)\b",
         re.IGNORECASE,
     )
     direct_pattern = re.compile(
@@ -8209,10 +8224,13 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[,.;!?]|$|\b(?:und|aber|doch|jedoch)\b))",
             re.IGNORECASE,
         ),
+        _CITY_BEFORE_PLAIN_RELATIVE_RESIDENCE,
+        _CITY_WITH_PLAIN_RELATIVE_RESIDENCE,
         _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
         re.compile(
             r"\b(?:es\s+ist\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s+"
-            r"wo\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
+            r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+(?:ich|wir)\s+"
+            r"(?:wohne|wohnen|lebe|leben)\b",
             re.IGNORECASE,
         ),
         re.compile(
@@ -8251,6 +8269,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             pattern_start = match.start()
             city_start = match.start("city")
             city_end = match.end("city")
+            if re.match(r"(?i)^(?:ich|wir)\b", match.group("city").strip()):
+                continue
             if (
                 _has_historical_residence_prefix(source, pattern_start)
                 or _has_future_residence_prefix(source, pattern_start, city_start)
@@ -8269,6 +8289,12 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
                 residence_targets.add(_city_comparison_key(city))
     if len(residence_targets) > 1:
         return True
+    if re.search(
+        r"(?i)\b(?:wo|in\s+(?:der|dem|welcher)|worin)\s+(?:ich|wir)\s+"
+        r"(?:wohne|wohnen|lebe|leben)\b",
+        source,
+    ) and not _has_conflicting_current_relative_residence(source):
+        return False
     bare_label_conflict = re.search(
         rf"(?:^|[.!?;\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
@@ -8342,7 +8368,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     for pattern in (
         re.compile(
             rf"\b{residence}\s+(?:in|bei)\s+(?P<first>[^,.;!?]{{1,80}})[,;]\s*"
-            r"(?!(?:der|die|das|dem|den|des|aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
+            r"(?!(?:der|die|das|dem|den|des|wo\b|in\s+(?:der|dem|welcher)|worin\b|aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
             r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
             r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
             r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;,]|$)",
@@ -8352,7 +8378,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
             r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?P<first>[^,.;!?]{1,80})[,;]\s*"
-            r"(?!(?:der|die|das|dem|den|des|aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
+            r"(?!(?:der|die|das|dem|den|des|wo\b|in\s+(?:der|dem|welcher)|worin\b|aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
             r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
             r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
             r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;,]|$)",
@@ -8912,6 +8938,8 @@ def _clean_city(value: str) -> str:
     if source.count(")") > source.count("("):
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
+    if re.search(r"(?i)\b(?:ist|war|wird)\s+(?:der|die|das)\b", normalized_source):
+        return ""
     if re.match(
         r"(?i)^(?:heute|gestern|vorgestern|früher|frueher|vorher|zuvor|davor|damals|ehemals|"
         r"aber|doch|jedoch|sondern)(?:\s|$)",
