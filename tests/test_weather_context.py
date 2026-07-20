@@ -3430,6 +3430,8 @@ def test_extract_residence_city_ignores_common_foreign_person_residence_labels()
     )
     for text in cases:
         assert extract_residence_city(text) == "Berlin"
+    assert extract_residence_city("Berlin ist der Wohnort meiner Frau und Hamburg mein Wohnort.") == "Hamburg"
+    assert extract_residence_city("Berlin ist der Wohnort meiner Frau sowie Hamburg mein Wohnort.") == "Hamburg"
 
 
 def test_extract_residence_city_handles_have_primary_home_label() -> None:

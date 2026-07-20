@@ -5551,7 +5551,14 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
 
 def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
     prefix = source[:pattern_start]
-    segment = re.split(r"[,;]\s*", prefix)[-1]
+    boundary = re.match(r"(?i)(?:und|sowie|oder)\b", source[pattern_start:])
+    if boundary:
+        prefix += " " + boundary.group(0)
+    segment = re.split(
+        r"(?:[,;]|\b(?:und|sowie|oder)\b)\s*",
+        prefix,
+        flags=re.IGNORECASE,
+    )[-1]
     return bool(
         re.search(
             rf"(?i)\b(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
