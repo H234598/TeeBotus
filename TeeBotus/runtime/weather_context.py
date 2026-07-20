@@ -2908,6 +2908,16 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|nahe|unweit\s+von)\s+"
+        r"[^,.;!?]{1,80},\s*"
+        r"(?:genauer(?:\s+gesagt)?|konkret|nämlich|naemlich|und\s+zwar|"
+        r"besser\s+gesagt|sprich)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
         r"(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:(?:ich|wir)\s+)?"
