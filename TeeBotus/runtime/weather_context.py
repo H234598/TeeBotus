@@ -6078,7 +6078,9 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:\bwo\s+(?:(?:genau|eigentlich)\s+)?(?:wohnst|lebst)\s+du(?:\s+(?:genau|eigentlich|denn))?|"
+        r"(?:\b(?:weißt|weisst)\s+du(?:\s+(?:genau|eigentlich))?,?\s+"
+        r"wo\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)|"
+        r"\bwo\s+(?:(?:genau|eigentlich)\s+)?(?:wohnst|lebst)\s+du(?:\s+(?:genau|eigentlich|denn))?|"
         r"\bwo\s+in\s+(?:deutschland|österreich|oesterreich|schweiz)\s+"
         r"(?:wohnst|lebst)\s+du(?:\s+denn)?|"
         r"\bin\s+welcher\s+stadt\s+(?:wohnst|lebst)\s+du(?:\s+denn)?|"
@@ -6771,7 +6773,9 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     ):
         return False
     question_answer = re.search(
-        r"(?:\bwo\s+(?:(?:genau|eigentlich)\s+)?(?:wohnst|lebst)\s+du(?:\s+(?:genau|eigentlich|denn))?|"
+        r"(?:\b(?:weißt|weisst)\s+du(?:\s+(?:genau|eigentlich))?,?\s+"
+        r"wo\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)|"
+        r"\bwo\s+(?:(?:genau|eigentlich)\s+)?(?:wohnst|lebst)\s+du(?:\s+(?:genau|eigentlich|denn))?|"
         r"\bwo\s+in\s+(?:deutschland|österreich|oesterreich|schweiz)\s+"
         r"(?:wohnst|lebst)\s+du(?:\s+denn)?|"
         r"\bin\s+welcher\s+stadt\s+(?:wohnst|lebst)\s+du(?:\s+denn)?|"
