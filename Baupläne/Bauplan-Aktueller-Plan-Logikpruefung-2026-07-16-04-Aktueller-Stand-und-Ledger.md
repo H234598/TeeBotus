@@ -2768,3 +2768,16 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `4dbe0e6f`.
 - Neuer Zyklusstand: `8/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Label-first-Fremdperson mit verkürztem Eigenort
+
+- Formen wie `Der Wohnort meiner Frau ist Hamburg und ich in Berlin` wurden
+  bisher nicht als eigener Wohnort erkannt.
+- Ein separater Matcher deckt jetzt `Wohnort/Wohnadresse/Wohnsitz + Besitzform +
+  Fremdstadt` mit anschließender verkürzter `ich/wir in/bei Stadt`-Angabe ab.
+  Andere Pronomen wie `du` bleiben ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `256 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `db6558c3`.
+- Neuer Zyklusstand: `11/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
