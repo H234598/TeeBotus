@@ -912,6 +912,15 @@ _TEMPORAL_REGISTERED_CITY = re.compile(
     r"(?:gemeldet|registriert)\b",
     re.IGNORECASE,
 )
+_INVERTED_REGISTERED_CITY = re.compile(
+    r"(?:^|[.!?;,:]\s*)"
+    r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+    r"(?:gemeldet|registriert)\s+(?:bin|sind)\s*(?:ich|wir)\s*"
+    r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+    r"(?::\s*|(?:in|bei)\s+)"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+lautet\s+"
     r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -2821,6 +2830,7 @@ CITY_PATTERNS = (
     _QUALIFIED_RESIDENCE,
     _CURRENT_RESIDENCE_LABEL_CITY,
     _LABELED_COMPOUND_RESIDENCE_CITY,
+    _INVERTED_REGISTERED_CITY,
     re.compile(
         rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*{_OTHER_PERSON_LOCATION_LABEL}\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
@@ -6632,15 +6642,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"(?:gemeldet|registriert)\b",
             re.IGNORECASE,
         ),
-        re.compile(
-            r"(?:^|[.!?;,:]\s*)"
-            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
-            r"(?:gemeldet|registriert)\s+(?:bin|sind)\s+(?:ich|wir)\s+"
-            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
-            r"(?:in|bei)\s+"
-            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
-            re.IGNORECASE,
-        ),
+        _INVERTED_REGISTERED_CITY,
         re.compile(
             r"\b(?:meine|unsere|mein|unser)\s+"
             r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|aktuell\w*)\s+)?"
