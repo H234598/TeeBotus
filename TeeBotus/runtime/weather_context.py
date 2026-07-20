@@ -946,12 +946,15 @@ _INVERTED_RELATIVE_RESIDENCE_CITY = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_SHORT_RESIDENCE_CLAUSE_SEPARATOR = (
+    r"(?:[.!?]\s+|[,;]\s*(?:und|sowie|aber|doch|jedoch|während|waehrend)?\s*|"
+    r"(?:und|sowie|aber|doch|jedoch|während|waehrend)\s+)"
+)
 _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY = re.compile(
     rf"\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
     r"(?:wohnt|wohnen|lebt|leben|ist|sind)\s+(?:in|bei)\s+"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
-    r"(?:(?:[,;]\s*(?:und|sowie|aber|doch|jedoch|während|waehrend)?|"
-    r"(?:und|sowie|aber|doch|jedoch|während|waehrend))\s*)"
+    rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
     r"(?:ich|wir)\s+(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
@@ -963,8 +966,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_CITY = re.compile(
     r"(?:\s+(?:ist|liegt|bleibt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?|"
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
-    r"(?:(?:[,;]\s*(?:und|sowie|aber|doch|jedoch|während|waehrend)?|"
-    r"(?:und|sowie|aber|doch|jedoch|während|waehrend))\s*)"
+    rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
     r"(?:ich|wir)\s+(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
@@ -974,8 +976,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_PRONOUN_CITY = re.compile(
     r"(?:\s+(?:ist|liegt|bleibt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?|"
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
-    r"(?:(?:[,;]\s*(?:und|sowie|aber|doch|jedoch|während|waehrend)?|"
-    r"(?:und|sowie|aber|doch|jedoch|während|waehrend))\s*)"
+    rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
     r"(?:ich|wir)\s+(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
@@ -987,8 +988,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_POSSESSIVE_CITY = re.compile(
     r"(?:\s+(?:ist|liegt|bleibt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?|"
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
-    r"(?:(?:[,;]\s*(?:und|sowie|aber|doch|jedoch|während|waehrend)?|"
-    r"(?:und|sowie|aber|doch|jedoch|während|waehrend))\s*)"
+    rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
     r"(?:meiner|meine|meines|meins|unserer|unsere|unseres|unsers)\s+"
     r"(?:ist|liegt|bleibt|lautet)\s+(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
