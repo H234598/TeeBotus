@@ -1222,13 +1222,14 @@ _CITY_BEFORE_RELATIVE_COMPANION_RESIDENCE = re.compile(
     r"[^,.;!?]{1,80}\s+(?:wohne|wohnen|lebe|leben)\b",
     re.IGNORECASE,
 )
-_CITY_BEFORE_RESIDENCE_REGISTRATION_HAVE = re.compile(
+_CITY_BEFORE_RESIDENCE_ADDRESS_HAVE = re.compile(
     r"(?:^|[.!?;,:]\s*)(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
     r"(?:habe|haben)\s+(?:ich|wir)\s+"
     r"(?:meine|meinen|mein|unsere|unseren|unser)\s+"
     rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
-    r"(?:meldeadresse|meldeanschrift|meldesitz)\b",
+    r"(?:meldeadresse|meldeanschrift|meldesitz|wohnadresse|wohnanschrift|privatadresse|"
+    r"privatanschrift|adresse|anschrift)\b",
     re.IGNORECASE,
 )
 _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE = re.compile(
@@ -3372,7 +3373,7 @@ CITY_CHANGE_PATTERNS = (
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
     _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR,
-    _CITY_BEFORE_RESIDENCE_REGISTRATION_HAVE,
+    _CITY_BEFORE_RESIDENCE_ADDRESS_HAVE,
     _CITY_BEFORE_RELATIVE_RESIDENCE_LABEL,
     _CITY_BEFORE_RELATIVE_COMPANION_RESIDENCE,
     _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
