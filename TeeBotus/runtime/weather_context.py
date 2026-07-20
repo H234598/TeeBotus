@@ -1168,6 +1168,20 @@ _DIRECT_RESIDENCE_REGISTRATION_LABEL_ALIAS_PAIR = re.compile(
     r"\s*(?::|=|,|\s+)\s*(?:auch|ebenfalls|ebenso|gleichfalls)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR = re.compile(
+    rf"(?:^|[.!?;\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?P<first_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"meldeadresse|meldeanschrift|meldesitz)"
+    r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
+    r"(?P<first_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+    r"(?:auch|ebenfalls|ebenso|gleichfalls)\s+"
+    rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?P<second_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"meldeadresse|meldeanschrift|meldesitz)"
+    r"(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+lautet\s+"
     r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -3266,6 +3280,7 @@ CITY_CHANGE_PATTERNS = (
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
+    _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR,
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
@@ -6003,6 +6018,11 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
+    for pair in _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR.finditer(multiplicity_source):
+        first = _clean_city(pair.group("first_city"))
+        second = _clean_city(pair.group("city"))
+        if first and second:
+            return _city_comparison_key(first) != _city_comparison_key(second)
     for pair in _DIRECT_RESIDENCE_REGISTRATION_LABEL_PAIR.finditer(multiplicity_source):
         first_is_registration = pair.group("first_label").casefold() in {
             "meldeadresse",

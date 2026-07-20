@@ -3354,6 +3354,8 @@ def test_extract_residence_city_handles_direct_residence_registration_aliases() 
     assert extract_residence_city("Wohnort: Berlin, aber Meldeadresse: Berlin.") == "Berlin"
     assert extract_residence_city("Wohnort: Berlin, aber Meldeadresse: Hamburg.") == ""
     assert extract_residence_city("Wohnort: Berlin, Meldeadresse ebenfalls Hamburg.") == ""
+    assert extract_residence_city("Wohnort Berlin, Hamburg ebenfalls mein Wohnort.") == ""
+    assert extract_residence_city("Wohnort Berlin, Berlin ebenfalls mein Wohnort.") == "Berlin"
 
 
 def test_extract_residence_city_handles_genitive_residence_addresses() -> None:
