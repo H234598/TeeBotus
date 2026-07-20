@@ -3776,7 +3776,8 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"(?:^|[.!?;,:]\s*)(?:heute|jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
+        rf"(?:^|[.!?;,:]\s*)(?:heute|jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|"
+        r"ab\s+(?:sofort|jetzt|heute)|seit\s+heute)\s+"
         r"(?:(?:ich|wir)\s+)?(?:bin|sind)\s+(?:(?:ich|wir)\s+)?"
         r"(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
