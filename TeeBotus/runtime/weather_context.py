@@ -7703,6 +7703,13 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ),
         _DIRECT_RESIDENCE_LABEL_CITY,
         _INVERTED_RELATIVE_RESIDENCE_CITY,
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*(?:(?:und|aber|doch|jedoch|sondern)\s+)?)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{{1,80}}?)\s*"
+            r"(?:,|;|:|[-–—])\s*wo\s+(?:ich|wir)\s+"
+            r"(?:wohne|wohnen|lebe|leben)\b",
+            re.IGNORECASE,
+        ),
+        _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
         _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY,
         _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_CITY,
         _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_PRONOUN_CITY,
@@ -8023,6 +8030,16 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:in|bei)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s+"
+            r"(?:habe|haben)\s+(?:ich|wir)\s+"
+            r"(?:meine|unsere)\s+"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|"
+            r"privatanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
             r"[,;]\s*(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz)\s+"
             rf"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
             re.IGNORECASE,
@@ -8038,7 +8055,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{{1,80}}?)\s*,?\s+"
+            rf"(?:^|[.!?;,:]\s*(?:(?:und|aber|doch|jedoch|sondern)\s+)?)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{{1,80}}?)\s*,?\s+"
             r"wo\s+(?:mein(?:e)?|unser(?:e)?)\s+"
             rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
             r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|"
