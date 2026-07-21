@@ -5411,7 +5411,7 @@ def test_weather_context_text_rejects_missing_or_invalid_check_timestamp(tmp_pat
     assert weather_context_text(account_store, account_id) == ""
 
 
-def test_future_weather_check_timestamp_does_not_block_recheck(tmp_path) -> None:
+def test_future_weather_check_timestamp_keeps_rate_limit(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
     calls: list[str] = []
@@ -5439,9 +5439,9 @@ def test_future_weather_check_timestamp_does_not_block_recheck(tmp_path) -> None
         provider=provider,
     )
 
-    assert result.checked is True
-    assert result.skipped_reason == ""
-    assert calls == ["Berlin", "Berlin"]
+    assert result.checked is False
+    assert result.skipped_reason == "rate_limited"
+    assert calls == ["Berlin"]
 
 
 def test_parallel_weather_updates_share_one_rate_limited_check(tmp_path) -> None:
