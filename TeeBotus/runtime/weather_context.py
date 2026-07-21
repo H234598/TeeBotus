@@ -6235,6 +6235,14 @@ class WeatherContextResult:
     skipped_reason: str = ""
 
 
+@dataclass(frozen=True)
+class _WeatherCheckRequest:
+    city: str
+    now: datetime
+    previous_state: dict[str, Any]
+    city_memory_snapshot: CityMemorySnapshot | None
+
+
 WeatherProvider = Callable[[str], str]
 StructuredDecisionRunner = Callable[[str, type[Any]], Any]
 CityMemorySnapshot = tuple[list[dict[str, Any]], dict[str, Any]]
@@ -6344,23 +6352,42 @@ def update_city_and_weather_context(
     # Keep optional model latency outside the account-memory lock.
     resolved_city = _resolve_residence_city(text, structured_decision_runner)
     with account_store.account_memory_lock(account_id):
-        return _update_city_and_weather_context_unlocked(
+        prepared = _prepare_weather_check_unlocked(
             account_store,
             account_id,
             city=resolved_city,
             now=now,
-            provider=provider,
         )
+    if isinstance(prepared, WeatherContextResult):
+        return prepared
+
+    weather_provider = provider if provider is not None else fetch_weather_summary
+    try:
+        summary = weather_provider(prepared.city).strip()
+    except Exception as exc:
+        return _finish_weather_check(
+            account_store,
+            account_id,
+            prepared,
+            error=f"{type(exc).__name__}: {exc}"[:240],
+        )
+    if not summary:
+        return _finish_weather_check(
+            account_store,
+            account_id,
+            prepared,
+            error="empty weather summary",
+        )
+    return _finish_weather_check(account_store, account_id, prepared, summary=summary)
 
 
-def _update_city_and_weather_context_unlocked(
+def _prepare_weather_check_unlocked(
     account_store: AccountStore,
     account_id: str,
     *,
     city: str,
     now: datetime | None = None,
-    provider: WeatherProvider | None = None,
-) -> WeatherContextResult:
+) -> WeatherContextResult | _WeatherCheckRequest:
     resolved_now = _aware(now or datetime.now(timezone.utc))
     state = account_store.read_agent_state(account_id)
     previous_state = deepcopy(state)
@@ -6401,29 +6428,56 @@ def _update_city_and_weather_context_unlocked(
             weather_text=str(weather_state.get("summary") or "").strip(),
             skipped_reason="rate_limited",
         )
-    weather_provider = provider if provider is not None else fetch_weather_summary
-    try:
-        summary = weather_provider(current_city).strip()
-    except Exception as exc:
-        weather_state["summary"] = ""
-        weather_state["last_error"] = f"{type(exc).__name__}: {exc}"[:240]
-        weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
-        weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
-        _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
-        return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
-    if not summary:
-        weather_state["summary"] = ""
-        weather_state["last_error"] = "empty weather summary"
-        weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
-        weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
-        _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
-        return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
-    weather_state["summary"] = summary[:500]
-    weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
+    # Reserve check window before releasing lock. This preserves single-flight
+    # behavior across threads/processes without holding memory lock during HTTP.
+    weather_state["summary"] = ""
     weather_state["last_error"] = ""
+    weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
     weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
     _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
-    return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
+    return _WeatherCheckRequest(
+        city=current_city,
+        now=resolved_now,
+        previous_state=previous_state,
+        city_memory_snapshot=city_memory_snapshot,
+    )
+
+
+def _finish_weather_check(
+    account_store: AccountStore,
+    account_id: str,
+    request: _WeatherCheckRequest,
+    *,
+    summary: str = "",
+    error: str = "",
+) -> WeatherContextResult:
+    with account_store.account_memory_lock(account_id):
+        state = account_store.read_agent_state(account_id)
+        weather_state = _ensure_weather_state(state)
+        current_city = str(weather_state.get("city") or "").strip()
+        if _city_comparison_key(current_city) != _city_comparison_key(request.city):
+            return WeatherContextResult(
+                city=current_city,
+                skipped_reason="city_changed_during_check",
+            )
+        if error:
+            weather_state["summary"] = ""
+            weather_state["last_error"] = error
+        else:
+            weather_state["summary"] = summary[:500]
+            weather_state["last_error"] = ""
+        weather_state["last_checked_at"] = request.now.isoformat(timespec="seconds")
+        weather_state["updated_at"] = request.now.isoformat(timespec="seconds")
+        _write_weather_state(
+            account_store,
+            account_id,
+            state,
+            request.previous_state,
+            request.city_memory_snapshot,
+        )
+        if error:
+            return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
+        return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
 
 
 def _resolve_residence_city(

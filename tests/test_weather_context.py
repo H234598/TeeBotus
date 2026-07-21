@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import json
+from threading import Event
 import time
 from unittest.mock import patch
 
@@ -5468,6 +5469,47 @@ def test_parallel_weather_updates_share_one_rate_limited_check(tmp_path) -> None
 
     assert len(calls) == 1
     assert sorted(result.checked for result in results) == [False, True]
+
+
+def test_weather_provider_does_not_hold_memory_lock_or_overwrite_new_city(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    provider_started = Event()
+    provider_release = Event()
+
+    def provider(city: str) -> str:
+        provider_started.set()
+        assert provider_release.wait(timeout=2)
+        return f"{city}: 12 C"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(
+            update_city_and_weather_context,
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+            provider=provider,
+        )
+        assert provider_started.wait(timeout=2)
+
+        read_state = executor.submit(account_store.read_agent_state, account_id)
+        assert isinstance(read_state.result(timeout=0.5), dict)
+
+        second = update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Potsdam.",
+            now=datetime(2026, 6, 15, 9, 5, tzinfo=timezone.utc),
+            provider=provider,
+        )
+        assert second.skipped_reason == "rate_limited"
+        provider_release.set()
+        assert first.result(timeout=2).skipped_reason == "city_changed_during_check"
+
+    weather_state = account_store.read_agent_state(account_id)["weather_context"]
+    assert weather_state["city"] == "Potsdam"
+    assert weather_state["summary"] == ""
 
 
 def test_engine_adds_cached_weather_context_to_openai_prompt(tmp_path, monkeypatch) -> None:
