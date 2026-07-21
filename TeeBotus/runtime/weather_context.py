@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hashlib
 import re
+import unicodedata
 import urllib.parse
 import urllib.request
 from copy import deepcopy
@@ -10713,7 +10714,7 @@ def _city_id_token(city: str) -> str:
 
 def _city_comparison_key(city: str) -> str:
     return (
-        re.sub(r"\s+", " ", str(city or "").strip())
+        re.sub(r"\s+", " ", unicodedata.normalize("NFKC", str(city or "").strip()))
         .casefold()
         .replace("ä", "ae")
         .replace("ö", "oe")

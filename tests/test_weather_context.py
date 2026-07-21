@@ -4892,6 +4892,32 @@ def test_city_comparison_keeps_transliterated_same_city(tmp_path) -> None:
     assert residence_ids[0].startswith("mem_residence_city_mnchen_")
 
 
+def test_city_comparison_keeps_decomposed_unicode_city(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in München.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 12 C",
+    )
+    decomposed_city = "Mu\u0308nchen"
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        f"Mein Wohnort ist {decomposed_city}.",
+        now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 13 C",
+    )
+
+    assert result.checked is True
+    assert calls == ["München", "München"]
+    assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "München"
+
+
 def test_weather_context_honors_falsey_provider(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
