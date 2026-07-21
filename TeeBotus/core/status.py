@@ -622,10 +622,22 @@ def _llm_client_status_label(client: object | None, *, fallback_provider: str = 
 def _structured_decision_status_label(runner: object | None) -> str:
     if runner is None:
         return "aus"
-    provider = _normalize_status_provider(
-        _first_status_attr(runner, "llm_provider", "pydantic_ai_provider", "provider_name", "provider") or "aktiv"
-    )
-    model = _first_status_attr(runner, "model_name", "pydantic_ai_model_name", "hf_pool_request_model", "llm_model")
+    fallback_used = bool(_status_object_attr(runner, "llm_fallback_used", False))
+    route_provider = _normalize_status_provider(_first_status_attr(runner, "llm_provider", "provider_name", "provider") or "aktiv")
+    route_model = _first_status_attr(runner, "model_name", "hf_pool_request_model", "llm_model")
+    if fallback_used:
+        provider = _normalize_status_provider(
+            _first_status_attr(runner, "pydantic_ai_provider", "litellm_provider", "provider_name", "provider") or "aktiv"
+        )
+        model = _first_status_attr(runner, "pydantic_ai_model_name", "model_name", "llm_model")
+        label = f"aktiv - {provider}"
+        if model:
+            label += f" / {model}"
+        if route_provider or route_model:
+            label += f" (Fallback aktiv; Primaerroute: {route_provider} / {route_model})"
+        return label
+    provider = route_provider
+    model = route_model or _first_status_attr(runner, "pydantic_ai_model_name")
     label = f"aktiv - {provider}"
     if model:
         label += f" / {model}"

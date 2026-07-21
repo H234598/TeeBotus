@@ -26,6 +26,7 @@ from TeeBotus.decisions import (
 )
 from TeeBotus.decisions.pydantic_agent import PydanticAIUnavailableError
 from TeeBotus.ai_structures import pydantic_ai_adapter
+from TeeBotus.core.status import _structured_decision_status_label
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore
 from TeeBotus.llm.profiles import LLMProfile
@@ -740,6 +741,24 @@ def test_pydantic_ai_router_runner_uses_local_fallback_when_hf_pool_unavailable(
     assert getattr(runner, "llm_fallback_model") == "ollama_chat/llama3.1:8b"
     assert "disabled" in getattr(runner, "llm_primary_error")
     assert route_calls == [{"purpose": "structured_decision", "allow_remote_fallback": False}]
+
+
+def test_structured_decision_status_shows_effective_fallback_backend() -> None:
+    runner = types.SimpleNamespace(
+        llm_fallback_used=True,
+        llm_provider="hf_pool",
+        model_name="pool:default#structured_decision",
+        pydantic_ai_provider="litellm",
+        pydantic_ai_model_name="ollama/llama3.1:8b",
+        llm_fallback_model="ollama_chat/llama3.1:8b",
+    )
+
+    label = _structured_decision_status_label(runner)
+
+    assert label == (
+        "aktiv - litellm / ollama/llama3.1:8b "
+        "(Fallback aktiv; Primaerroute: hf_pool / pool:default#structured_decision)"
+    )
 
 
 def test_pydantic_ai_adapter_reports_hf_pool_missing_key_before_live_call(tmp_path) -> None:
