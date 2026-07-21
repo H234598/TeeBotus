@@ -6594,32 +6594,38 @@ def _resolve_residence_city(
     structured_decision_runner: StructuredDecisionRunner | None,
 ) -> str:
     source = str(text or "").strip()
-    if not source or not _RESIDENCE_SIGNAL_RE.search(source):
+    if not source:
         return ""
 
-    deterministic_city = _fast_primary_residence_city(source)
-    tokens = {
-        token.strip(".,;:!?()[]{}\"'").casefold()
-        for token in source.split()
-        if token.strip(".,;:!?()[]{}\"'")
-    }
-    temporal_conflict = bool(tokens & _RESIDENCE_CONTRAST_MARKERS) and bool(tokens & _RESIDENCE_TEMPORAL_MARKERS)
-    competing_labels = len(_RESIDENCE_LABEL_RE.findall(source)) > 1 or temporal_conflict
-    if deterministic_city and _is_safe_city_candidate(deterministic_city) and not competing_labels:
-        return deterministic_city
-    if structured_decision_runner is None:
-        # Compatibility fallback for callers without a structured decision backend.
-        # Runtime paths with a runner must not enter this large legacy pattern set.
-        if len(source) > MAX_RESIDENCE_FALLBACK_TEXT_LENGTH:
-            return ""
-        deterministic_city = extract_residence_city(source)
-        if deterministic_city and _is_safe_city_candidate(deterministic_city):
-            return deterministic_city
+    long_source = len(source) > MAX_RESIDENCE_FALLBACK_TEXT_LENGTH
+    decision_source = _bounded_residence_decision_text(source) if long_source else source
+    if not _RESIDENCE_SIGNAL_RE.search(decision_source):
         return ""
+    if long_source and structured_decision_runner is None:
+        return ""
+
+    if not long_source:
+        deterministic_city = _fast_primary_residence_city(source)
+        tokens = {
+            token.strip(".,;:!?()[]{}\"'").casefold()
+            for token in source.split()
+            if token.strip(".,;:!?()[]{}\"'")
+        }
+        temporal_conflict = bool(tokens & _RESIDENCE_CONTRAST_MARKERS) and bool(tokens & _RESIDENCE_TEMPORAL_MARKERS)
+        competing_labels = len(_RESIDENCE_LABEL_RE.findall(source)) > 1 or temporal_conflict
+        if deterministic_city and _is_safe_city_candidate(deterministic_city) and not competing_labels:
+            return deterministic_city
+        if structured_decision_runner is None:
+            # Compatibility fallback for callers without a structured decision backend.
+            # Runtime paths with a runner must not enter this large legacy pattern set.
+            deterministic_city = extract_residence_city(source)
+            if deterministic_city and _is_safe_city_candidate(deterministic_city):
+                return deterministic_city
+            return ""
 
     try:
         decision = decide_residence(
-            _bounded_residence_decision_text(source),
+            decision_source,
             model_runner=structured_decision_runner,
         )
     except Exception:
@@ -6628,7 +6634,8 @@ def _resolve_residence_city(
     if decision.kind != "primary" or decision.confidence < RESIDENCE_DECISION_MIN_CONFIDENCE:
         return ""
     candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?")
-    if not candidate or not _is_safe_city_candidate(candidate) or not _contains_source_phrase(source, candidate):
+    validation_source = decision_source if long_source else source
+    if not candidate or not _is_safe_city_candidate(candidate) or not _contains_source_phrase(validation_source, candidate):
         return ""
     return candidate
 

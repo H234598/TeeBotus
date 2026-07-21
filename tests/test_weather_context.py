@@ -4755,6 +4755,19 @@ def test_long_ambiguous_residence_text_is_bounded_for_structured_decision() -> N
     assert len(decision_text) <= 1200
 
 
+def test_long_residence_claim_uses_bounded_decision_without_full_scan() -> None:
+    prompts: list[str] = []
+    text = "Ich wohne in Berlin. " + ("Zusatztext " * 150)
+
+    def decision_runner(prompt: str, _schema: type[object]) -> object:
+        prompts.append(prompt)
+        return {"kind": "primary", "city": "Berlin", "confidence": 0.94}
+
+    assert _resolve_residence_city(text, decision_runner) == "Berlin"
+    assert len(prompts) == 1
+    assert len(prompts[0].split("Nachricht:\n", 1)[1]) <= 1200
+
+
 def test_residence_provider_failure_fails_closed(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
