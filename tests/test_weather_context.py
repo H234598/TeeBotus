@@ -4864,7 +4864,7 @@ def test_initial_city_memory_rolls_back_after_append_persist_failure(tmp_path) -
     assert account_store.read_memory_index(account_id) == previous_index
 
 
-def test_city_change_invalidates_weather_cache_and_checks_new_city(tmp_path) -> None:
+def test_city_change_invalidates_weather_cache_and_defers_new_city_check(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
     calls: list[str] = []
@@ -4876,11 +4876,22 @@ def test_city_change_invalidates_weather_cache_and_checks_new_city(tmp_path) -> 
     update_city_and_weather_context(account_store, account_id, "Ich wohne in Berlin.", now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc), provider=provider)
     result = update_city_and_weather_context(account_store, account_id, "Ich wohne in Potsdam.", now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc), provider=provider)
 
-    assert result.checked is True
-    assert result.skipped_reason == ""
-    assert result.weather_text == "Potsdam: 9 C"
+    assert result.checked is False
+    assert result.skipped_reason == "rate_limited"
+    assert result.weather_text == ""
     assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Potsdam"
-    assert "Potsdam: 9 C" in weather_context_text(account_store, account_id)
+    assert weather_context_text(account_store, account_id) == ""
+    assert calls == ["Berlin"]
+
+    deferred = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo nach zwei Stunden.",
+        now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+        provider=provider,
+    )
+    assert deferred.checked is True
+    assert deferred.weather_text == "Potsdam: 9 C"
     assert calls == ["Berlin", "Potsdam"]
 
 
