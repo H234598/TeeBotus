@@ -5517,6 +5517,37 @@ def test_string_false_check_flag_is_not_treated_as_inflight(tmp_path) -> None:
     assert result.weather_text == "Berlin: 13 C"
 
 
+def test_inflight_state_without_timestamps_is_recovered(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    state = account_store.read_agent_state(account_id)
+    state["weather_context"] = {
+        "city": "Berlin",
+        "summary": "stale weather",
+        "last_checked_at": "",
+        "last_error": "",
+        "check_in_progress": True,
+        "check_id": "orphaned-check",
+        "check_started_at": "not-a-date",
+    }
+    account_store.write_agent_state(account_id, state)
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo.",
+        now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 13 C",
+    )
+
+    assert result.checked is True
+    assert result.weather_text == "Berlin: 13 C"
+    weather_state = account_store.read_agent_state(account_id)["weather_context"]
+    assert weather_state["check_in_progress"] is False
+    assert weather_state["check_id"] == ""
+    assert weather_state["check_started_at"] == ""
+
+
 def test_future_weather_check_timestamp_keeps_rate_limit(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

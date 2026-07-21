@@ -6456,6 +6456,11 @@ def _prepare_weather_check_unlocked(
                 and elapsed_since_check is not None
                 and elapsed_since_check >= WEATHER_CHECK_INTERVAL
             )
+            or (
+                not locally_active
+                and check_age is None
+                and elapsed_since_check is None
+            )
         )
         if not stale:
             if state_needs_write or city:
