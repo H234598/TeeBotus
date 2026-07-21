@@ -5426,6 +5426,14 @@ def test_weather_context_text_rejects_inflight_summary(tmp_path) -> None:
     account_store.write_agent_state(account_id, state)
 
     assert weather_context_text(account_store, account_id) == ""
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo.",
+        now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+        provider=lambda _city: "should not run",
+    )
+    assert result.weather_text == ""
 
 
 def test_future_weather_check_timestamp_keeps_rate_limit(tmp_path) -> None:

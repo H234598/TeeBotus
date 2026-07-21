@@ -6438,7 +6438,7 @@ def _prepare_weather_check_unlocked(
             _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(
             city=current_city,
-            weather_text=str(weather_state.get("summary") or "").strip(),
+            weather_text="",
             skipped_reason="rate_limited",
         )
     if bool(weather_state.get("check_in_progress")):
@@ -6457,7 +6457,7 @@ def _prepare_weather_check_unlocked(
                 _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
             return WeatherContextResult(
                 city=current_city,
-                weather_text=str(weather_state.get("summary") or "").strip(),
+                weather_text="",
                 skipped_reason="rate_limited",
             )
         weather_state["check_in_progress"] = False
