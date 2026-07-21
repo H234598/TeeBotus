@@ -6415,13 +6415,13 @@ def _prepare_weather_check_unlocked(
             city = previous_city
         memory_ok, city_memory_snapshot = _append_city_memory(account_store, account_id, city, resolved_now)
         if not memory_ok:
+            weather_state["summary"] = ""
+            weather_state["last_error"] = "residence memory unavailable"
+            weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
+            _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
             return WeatherContextResult(
                 city=previous_city,
-                weather_text=(
-                    ""
-                    if _weather_check_in_progress(weather_state)
-                    else str(weather_state.get("summary") or "").strip()
-                ),
+                weather_text="",
                 skipped_reason="memory_error",
             )
         weather_state["city"] = city

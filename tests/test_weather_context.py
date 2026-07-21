@@ -5684,6 +5684,50 @@ def test_memory_error_does_not_return_inflight_weather_summary(tmp_path, monkeyp
     assert result.weather_text == ""
 
 
+def test_memory_error_clears_cached_weather_context(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 12 C",
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.weather_context._append_city_memory",
+        lambda *_args, **_kwargs: (False, None),
+    )
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+        provider=lambda _city: "should not run",
+    )
+
+    assert result.skipped_reason == "memory_error"
+    assert result.weather_text == ""
+    assert weather_context_text(account_store, account_id) == ""
+    weather_state = account_store.read_agent_state(account_id)["weather_context"]
+    assert weather_state["summary"] == ""
+    assert weather_state["last_error"] == "residence memory unavailable"
+    monkeypatch.undo()
+
+    recovered = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo nach zwei Stunden.",
+        now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 13 C",
+    )
+
+    assert recovered.checked is True
+    assert recovered.weather_text == "Berlin: 13 C"
+    assert "Berlin: 13 C" in weather_context_text(account_store, account_id)
+
+
 def test_string_false_check_flag_is_not_treated_as_inflight(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
