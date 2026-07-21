@@ -5188,6 +5188,38 @@ def test_city_memory_is_not_duplicated_when_state_write_fails_after_append(tmp_p
     assert city_memories[0]["id"] == "mem_residence_city_berlin"
 
 
+def test_city_memory_rollback_preserves_memory_added_during_state_write(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    original_write_agent_state = account_store.write_agent_state
+    failed = False
+
+    def fail_once(write_account_id: str, state: dict[str, object]) -> None:
+        nonlocal failed
+        if not failed:
+            failed = True
+            account_store.append_structured_memory_entry(
+                account_id,
+                {"id": "mem_added_during_state_write", "user_text": "Concurrent memory"},
+            )
+            raise OSError("state write failed after concurrent memory")
+        original_write_agent_state(write_account_id, state)
+
+    with patch.object(account_store, "write_agent_state", side_effect=fail_once):
+        with pytest.raises(OSError, match="state write failed after concurrent memory"):
+            update_city_and_weather_context(
+                account_store,
+                account_id,
+                "Ich wohne in Berlin.",
+                now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+                provider=lambda city: f"{city}: 12 C",
+            )
+
+    memory_ids = [entry.get("id") for entry in account_store.read_memory_entries(account_id)]
+    assert "mem_added_during_state_write" in memory_ids
+    assert "mem_residence_city_berlin" not in memory_ids
+
+
 def test_city_change_rolls_back_memory_when_weather_state_write_fails(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

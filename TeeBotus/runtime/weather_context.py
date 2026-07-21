@@ -6246,8 +6246,6 @@ class _WeatherCheckRequest:
     city: str
     now: datetime
     check_id: str
-    previous_state: dict[str, Any]
-    city_memory_snapshot: CityMemorySnapshot | None
 
 
 WeatherProvider = Callable[[str], str]
@@ -6506,8 +6504,6 @@ def _prepare_weather_check_unlocked(
         city=current_city,
         now=resolved_now,
         check_id=check_id,
-        previous_state=previous_state,
-        city_memory_snapshot=city_memory_snapshot,
     )
 
 
@@ -6729,11 +6725,11 @@ def _write_weather_state(
             lambda: account_store.write_agent_state(account_id, previous_state),
         ]
         if city_memory_snapshot is not None:
-            previous_rows, previous_index = city_memory_snapshot
-            restores.extend(
-                (
-                    lambda: account_store.write_memory_entries(account_id, previous_rows),
-                    lambda: account_store.write_memory_index(account_id, previous_index),
+            restores.append(
+                lambda: _restore_weather_memory_snapshot_preserving_concurrent_changes(
+                    account_store,
+                    account_id,
+                    city_memory_snapshot,
                 )
             )
         for restore in restores:
@@ -6744,6 +6740,34 @@ def _write_weather_state(
         if rollback_errors:
             raise RuntimeError("weather state rollback failed; account state or residence memory may be inconsistent") from rollback_errors[0]
         raise
+
+
+def _restore_weather_memory_snapshot_preserving_concurrent_changes(
+    account_store: AccountStore,
+    account_id: str,
+    snapshot: CityMemorySnapshot,
+) -> None:
+    previous_rows, previous_index = snapshot
+    current_rows = account_store.read_memory_entries(account_id)
+
+    def is_residence_memory(row: Mapping[str, Any]) -> bool:
+        return str(row.get("id") or "").strip().startswith("mem_residence_city_")
+
+    previous_non_residence = [row for row in previous_rows if not is_residence_memory(row)]
+    current_non_residence = [
+        row
+        for row in current_rows
+        if isinstance(row, Mapping) and not is_residence_memory(row)
+    ]
+    if current_non_residence == previous_non_residence:
+        account_store.write_memory_entries(account_id, previous_rows)
+        account_store.write_memory_index(account_id, previous_index)
+        return
+
+    restored_rows = [dict(row) for row in current_non_residence]
+    restored_rows.extend(dict(row) for row in previous_rows if is_residence_memory(row))
+    account_store.write_memory_entries(account_id, restored_rows)
+    account_store.rebuild_structured_memory_index(account_id)
 
 
 def _append_city_memory(
