@@ -3223,6 +3223,7 @@ def _append_account_memory_interaction(
         "channel": event.channel,
         "chat_type": event.chat_type,
         "source": {
+            "event_id": event.event_id,
             "channel": event.channel,
             "adapter_slot": event.adapter_slot,
             "chat_id": event.chat_id,

@@ -4303,6 +4303,47 @@ def test_engine_appends_account_memory_after_openai_reply(tmp_path):
     assert "mond" in index["index"]["keywords"]
 
 
+def test_engine_memory_append_is_idempotent_for_replayed_event(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Antwort mit Mond.", "resp-memory-replay", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="replayed-memory-event")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
+    )
+    incoming = event(identity, "Merke Mond.", channel="signal")
+    incoming_other_chat = IncomingEvent(
+        event_id=incoming.event_id,
+        instance=incoming.instance,
+        channel=incoming.channel,
+        adapter_slot=incoming.adapter_slot,
+        account_id="",
+        identity_key=incoming.identity_key,
+        chat_id="chat-2",
+        chat_type=incoming.chat_type,
+        sender_id=incoming.sender_id,
+        sender_name=incoming.sender_name,
+        text=incoming.text,
+        message_ref=incoming.message_ref,
+    )
+
+    engine.process(incoming)
+    engine.process(incoming)
+    engine.process(incoming_other_chat)
+
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    entries = account_store.read_memory_entries(account_id)
+    assert len(entries) == 2
+    assert entries[0]["source"]["event_id"] == "signal:1"
+    assert {entry["source"]["chat_id"] for entry in entries} == {"chat-1", "chat-2"}
+
+
 def test_engine_appends_new_account_memory_to_qdrant_cache_when_semantic_enabled(tmp_path, monkeypatch):
     class FakeOpenAIClient:
         def create_reply(self, _user_text, _instructions, previous_response_id=None):
