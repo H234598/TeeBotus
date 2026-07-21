@@ -6411,7 +6411,11 @@ def _prepare_weather_check_unlocked(
         if not memory_ok:
             return WeatherContextResult(
                 city=previous_city,
-                weather_text=str(weather_state.get("summary") or "").strip(),
+                weather_text=(
+                    ""
+                    if bool(weather_state.get("check_in_progress"))
+                    else str(weather_state.get("summary") or "").strip()
+                ),
                 skipped_reason="memory_error",
             )
         weather_state["city"] = city

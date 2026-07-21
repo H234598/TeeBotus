@@ -5462,6 +5462,35 @@ def test_weather_context_text_rejects_inflight_summary(tmp_path) -> None:
     assert result.weather_text == ""
 
 
+def test_memory_error_does_not_return_inflight_weather_summary(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    state = account_store.read_agent_state(account_id)
+    state["weather_context"] = {
+        "city": "Berlin",
+        "summary": "stale weather",
+        "last_checked_at": "2026-06-15T09:00:00+00:00",
+        "last_error": "",
+        "check_in_progress": True,
+    }
+    account_store.write_agent_state(account_id, state)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.weather_context._append_city_memory",
+        lambda *_args, **_kwargs: (False, None),
+    )
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+        provider=lambda _city: "should not run",
+    )
+
+    assert result.skipped_reason == "memory_error"
+    assert result.weather_text == ""
+
+
 def test_future_weather_check_timestamp_keeps_rate_limit(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
