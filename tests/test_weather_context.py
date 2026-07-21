@@ -4834,6 +4834,23 @@ def test_weather_context_does_not_guess_conflict_without_decision_runner(tmp_pat
     assert result.skipped_reason == "no_city"
 
 
+def test_legacy_weather_route_rejects_temporary_only_residence(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin, aber nur vorübergehend.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 12 C",
+    )
+
+    assert result.skipped_reason == "no_city"
+    assert calls == []
+
+
 def test_weather_context_stores_clean_city_after_implicit_alias(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

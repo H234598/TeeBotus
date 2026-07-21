@@ -6617,7 +6617,11 @@ def _resolve_residence_city(
             # Compatibility fallback for callers without a structured decision backend.
             # Runtime paths with a runner must not enter this large legacy pattern set.
             deterministic_city = extract_residence_city(source)
-            if deterministic_city and _is_safe_city_candidate(deterministic_city):
+            if (
+                deterministic_city
+                and _is_safe_city_candidate(deterministic_city)
+                and not _candidate_only_occurs_in_temporary_context(source, deterministic_city)
+            ):
                 return deterministic_city
             return ""
 
