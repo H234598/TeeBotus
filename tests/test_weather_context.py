@@ -5305,6 +5305,48 @@ def test_city_memory_rollback_failure_is_not_hidden(tmp_path) -> None:
                 )
 
 
+def test_weather_finish_failure_does_not_erase_memory_added_during_provider(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    original_write_agent_state = account_store.write_agent_state
+    failed = False
+
+    def fail_finish(write_account_id: str, state: dict[str, object]) -> None:
+        nonlocal failed
+        weather_state = state.get("weather_context")
+        if (
+            not failed
+            and isinstance(weather_state, dict)
+            and weather_state.get("check_in_progress") is False
+            and weather_state.get("summary")
+        ):
+            failed = True
+            raise OSError("finish state write failed")
+        original_write_agent_state(write_account_id, state)
+
+    def provider(city: str) -> str:
+        account_store.append_structured_memory_entry(
+            account_id,
+            {"id": "mem_added_during_weather", "user_text": "Parallel memory"},
+        )
+        return f"{city}: 12 C"
+
+    with patch.object(account_store, "write_agent_state", side_effect=fail_finish):
+        with pytest.raises(OSError, match="finish state write failed"):
+            update_city_and_weather_context(
+                account_store,
+                account_id,
+                "Ich wohne in Berlin.",
+                now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+                provider=provider,
+            )
+
+    assert any(
+        entry.get("id") == "mem_added_during_weather"
+        for entry in account_store.read_memory_entries(account_id)
+    )
+
+
 def test_initial_city_memory_rollback_failure_is_not_hidden(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

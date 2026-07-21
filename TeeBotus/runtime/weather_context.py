@@ -6522,6 +6522,7 @@ def _finish_weather_check(
     try:
         with account_store.account_memory_lock(account_id):
             state = account_store.read_agent_state(account_id)
+            finish_previous_state = deepcopy(state)
             weather_state = _ensure_weather_state(state)
             current_city = str(weather_state.get("city") or "").strip()
             current_check_id = str(weather_state.get("check_id") or "").strip()
@@ -6549,8 +6550,8 @@ def _finish_weather_check(
                 account_store,
                 account_id,
                 state,
-                request.previous_state,
-                request.city_memory_snapshot,
+                finish_previous_state,
+                None,
             )
             if error:
                 return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
