@@ -6413,7 +6413,7 @@ def _prepare_weather_check_unlocked(
                 city=previous_city,
                 weather_text=(
                     ""
-                    if bool(weather_state.get("check_in_progress"))
+                    if _weather_check_in_progress(weather_state)
                     else str(weather_state.get("summary") or "").strip()
                 ),
                 skipped_reason="memory_error",
@@ -6438,7 +6438,7 @@ def _prepare_weather_check_unlocked(
     last_checked = _parse_datetime(str(weather_state.get("last_checked_at") or ""))
     elapsed_since_check = resolved_now - last_checked if last_checked is not None else None
     locally_active = _weather_check_is_active(account_store, account_id)
-    if locally_active and not bool(weather_state.get("check_in_progress")):
+    if locally_active and not _weather_check_in_progress(weather_state):
         if state_needs_write or city:
             _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(
@@ -6446,7 +6446,7 @@ def _prepare_weather_check_unlocked(
             weather_text="",
             skipped_reason="rate_limited",
         )
-    if bool(weather_state.get("check_in_progress")):
+    if _weather_check_in_progress(weather_state):
         check_started = _parse_datetime(str(weather_state.get("check_started_at") or ""))
         check_age = resolved_now - check_started if check_started is not None else None
         stale = bool(
@@ -6565,6 +6565,15 @@ def _weather_check_clear_active(account_store: AccountStore, account_id: str, ch
     with _ACTIVE_WEATHER_CHECKS_LOCK:
         if _ACTIVE_WEATHER_CHECKS.get(key) == check_id:
             _ACTIVE_WEATHER_CHECKS.pop(key, None)
+
+
+def _weather_check_in_progress(weather_state: Mapping[str, Any]) -> bool:
+    value = weather_state.get("check_in_progress")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value or "").strip().casefold() in {"1", "true", "yes", "on"}
 
 
 def _resolve_residence_city(
@@ -6827,7 +6836,7 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
         or not checked_at
         or _parse_datetime(checked_at) is None
         or last_error
-        or bool(weather_state.get("check_in_progress"))
+        or _weather_check_in_progress(weather_state)
     ):
         return ""
     return f"Stadt/Wohnort: {city}\nLetzter Wettercheck: {checked_at}\nKurz-Wetter: {summary}"

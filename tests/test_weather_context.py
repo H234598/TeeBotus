@@ -5491,6 +5491,32 @@ def test_memory_error_does_not_return_inflight_weather_summary(tmp_path, monkeyp
     assert result.weather_text == ""
 
 
+def test_string_false_check_flag_is_not_treated_as_inflight(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    state = account_store.read_agent_state(account_id)
+    state["weather_context"] = {
+        "city": "Berlin",
+        "summary": "cached weather",
+        "last_checked_at": "2026-06-15T09:00:00+00:00",
+        "last_error": "",
+        "check_in_progress": "false",
+    }
+    account_store.write_agent_state(account_id, state)
+
+    assert "cached weather" in weather_context_text(account_store, account_id)
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo.",
+        now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 13 C",
+    )
+
+    assert result.checked is True
+    assert result.weather_text == "Berlin: 13 C"
+
+
 def test_future_weather_check_timestamp_keeps_rate_limit(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
