@@ -5476,8 +5476,10 @@ def test_weather_provider_does_not_hold_memory_lock_or_overwrite_new_city(tmp_pa
     _identity, account_id = prepare_account(account_store)
     provider_started = Event()
     provider_release = Event()
+    calls: list[str] = []
 
     def provider(city: str) -> str:
+        calls.append(city)
         provider_started.set()
         assert provider_release.wait(timeout=2)
         return f"{city}: 12 C"
@@ -5504,12 +5506,59 @@ def test_weather_provider_does_not_hold_memory_lock_or_overwrite_new_city(tmp_pa
             provider=provider,
         )
         assert second.skipped_reason == "rate_limited"
+        third = update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Potsdam.",
+            now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+            provider=provider,
+        )
+        assert third.skipped_reason == "rate_limited"
+        assert calls == ["Berlin"]
         provider_release.set()
         assert first.result(timeout=2).skipped_reason == "city_changed_during_check"
 
     weather_state = account_store.read_agent_state(account_id)["weather_context"]
     assert weather_state["city"] == "Potsdam"
     assert weather_state["summary"] == ""
+
+
+def test_active_weather_check_blocks_recheck_after_window_until_provider_finishes(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    provider_started = Event()
+    provider_release = Event()
+    calls: list[str] = []
+
+    def provider(city: str) -> str:
+        calls.append(city)
+        provider_started.set()
+        if len(calls) == 1:
+            assert provider_release.wait(timeout=2)
+        return f"{city}: 12 C"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(
+            update_city_and_weather_context,
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+            provider=provider,
+        )
+        assert provider_started.wait(timeout=2)
+
+        second = update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+            provider=provider,
+        )
+        assert second.skipped_reason == "rate_limited"
+        assert calls == ["Berlin"]
+        provider_release.set()
+        assert first.result(timeout=2).checked is True
 
 
 def test_engine_adds_cached_weather_context_to_openai_prompt(tmp_path, monkeypatch) -> None:

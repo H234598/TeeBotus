@@ -8,7 +8,9 @@ import urllib.request
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from threading import RLock
 from typing import Any, Callable, Mapping
+from uuid import uuid4
 
 from TeeBotus.decisions.residence import decide_residence
 from TeeBotus.runtime.accounts import AccountStore
@@ -16,6 +18,9 @@ from TeeBotus.runtime.accounts import AccountStore
 WEATHER_CONTEXT_SCHEMA_VERSION = 1
 WEATHER_CHECK_INTERVAL = timedelta(hours=2)
 WEATHER_TIMEOUT_SECONDS = 2.5
+WEATHER_CHECK_STALE_AFTER = timedelta(seconds=max(WEATHER_TIMEOUT_SECONDS * 4, 30.0))
+_ACTIVE_WEATHER_CHECKS: dict[str, str] = {}
+_ACTIVE_WEATHER_CHECKS_LOCK = RLock()
 MAX_CITY_LENGTH = 80
 _NON_CITY_RESIDENCE_NAMES = frozenset(
     {
@@ -6239,6 +6244,7 @@ class WeatherContextResult:
 class _WeatherCheckRequest:
     city: str
     now: datetime
+    check_id: str
     previous_state: dict[str, Any]
     city_memory_snapshot: CityMemorySnapshot | None
 
@@ -6394,6 +6400,7 @@ def _prepare_weather_check_unlocked(
     weather_state = _ensure_weather_state(state)
     city_changed = False
     city_memory_snapshot: CityMemorySnapshot | None = None
+    state_needs_write = False
     if city:
         previous_city = str(weather_state.get("city") or "").strip()
         city_changed = _city_comparison_key(city) != _city_comparison_key(previous_city)
@@ -6409,10 +6416,15 @@ def _prepare_weather_check_unlocked(
         weather_state["city"] = city
         weather_state["city_updated_at"] = resolved_now.isoformat(timespec="seconds")
         if city_changed:
+            # A newer city invalidates any provider result still in flight.
+            weather_state["check_in_progress"] = False
+            weather_state["check_id"] = ""
+            weather_state["check_started_at"] = ""
             # A cached summary belongs to the previous city and must not be
             # presented as current weather while the global check window is active.
             weather_state["summary"] = ""
             weather_state["last_error"] = ""
+            state_needs_write = True
     current_city = str(weather_state.get("city") or "").strip()
     if not current_city:
         if city:
@@ -6420,8 +6432,40 @@ def _prepare_weather_check_unlocked(
         return WeatherContextResult(skipped_reason="no_city")
     last_checked = _parse_datetime(str(weather_state.get("last_checked_at") or ""))
     elapsed_since_check = resolved_now - last_checked if last_checked is not None else None
+    locally_active = _weather_check_is_active(account_store, account_id)
+    if locally_active and not bool(weather_state.get("check_in_progress")):
+        if state_needs_write or city:
+            _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
+        return WeatherContextResult(
+            city=current_city,
+            weather_text=str(weather_state.get("summary") or "").strip(),
+            skipped_reason="rate_limited",
+        )
+    if bool(weather_state.get("check_in_progress")):
+        check_started = _parse_datetime(str(weather_state.get("check_started_at") or ""))
+        check_age = resolved_now - check_started if check_started is not None else None
+        stale = bool(
+            (not locally_active and check_age is not None and check_age >= WEATHER_CHECK_STALE_AFTER)
+            or (
+                not locally_active and check_age is None
+                and elapsed_since_check is not None
+                and elapsed_since_check >= WEATHER_CHECK_INTERVAL
+            )
+        )
+        if not stale:
+            if state_needs_write or city:
+                _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
+            return WeatherContextResult(
+                city=current_city,
+                weather_text=str(weather_state.get("summary") or "").strip(),
+                skipped_reason="rate_limited",
+            )
+        weather_state["check_in_progress"] = False
+        weather_state["check_id"] = ""
+        weather_state["check_started_at"] = ""
+        state_needs_write = True
     if elapsed_since_check is not None and elapsed_since_check < WEATHER_CHECK_INTERVAL:
-        if city:
+        if state_needs_write or city:
             _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(
             city=current_city,
@@ -6434,10 +6478,16 @@ def _prepare_weather_check_unlocked(
     weather_state["last_error"] = ""
     weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
     weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
+    check_id = uuid4().hex
+    weather_state["check_in_progress"] = True
+    weather_state["check_id"] = check_id
+    weather_state["check_started_at"] = resolved_now.isoformat(timespec="seconds")
     _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
+    _weather_check_mark_active(account_store, account_id, check_id)
     return _WeatherCheckRequest(
         city=current_city,
         now=resolved_now,
+        check_id=check_id,
         previous_state=previous_state,
         city_memory_snapshot=city_memory_snapshot,
     )
@@ -6451,33 +6501,65 @@ def _finish_weather_check(
     summary: str = "",
     error: str = "",
 ) -> WeatherContextResult:
-    with account_store.account_memory_lock(account_id):
-        state = account_store.read_agent_state(account_id)
-        weather_state = _ensure_weather_state(state)
-        current_city = str(weather_state.get("city") or "").strip()
-        if _city_comparison_key(current_city) != _city_comparison_key(request.city):
-            return WeatherContextResult(
-                city=current_city,
-                skipped_reason="city_changed_during_check",
+    try:
+        with account_store.account_memory_lock(account_id):
+            state = account_store.read_agent_state(account_id)
+            weather_state = _ensure_weather_state(state)
+            current_city = str(weather_state.get("city") or "").strip()
+            current_check_id = str(weather_state.get("check_id") or "").strip()
+            if current_check_id != request.check_id:
+                return WeatherContextResult(
+                    city=current_city,
+                    skipped_reason=(
+                        "city_changed_during_check"
+                        if _city_comparison_key(current_city) != _city_comparison_key(request.city)
+                        else "check_superseded"
+                    ),
+                )
+            weather_state["check_in_progress"] = False
+            weather_state["check_id"] = ""
+            weather_state["check_started_at"] = ""
+            if error:
+                weather_state["summary"] = ""
+                weather_state["last_error"] = error
+            else:
+                weather_state["summary"] = summary[:500]
+                weather_state["last_error"] = ""
+            weather_state["last_checked_at"] = request.now.isoformat(timespec="seconds")
+            weather_state["updated_at"] = request.now.isoformat(timespec="seconds")
+            _write_weather_state(
+                account_store,
+                account_id,
+                state,
+                request.previous_state,
+                request.city_memory_snapshot,
             )
-        if error:
-            weather_state["summary"] = ""
-            weather_state["last_error"] = error
-        else:
-            weather_state["summary"] = summary[:500]
-            weather_state["last_error"] = ""
-        weather_state["last_checked_at"] = request.now.isoformat(timespec="seconds")
-        weather_state["updated_at"] = request.now.isoformat(timespec="seconds")
-        _write_weather_state(
-            account_store,
-            account_id,
-            state,
-            request.previous_state,
-            request.city_memory_snapshot,
-        )
-        if error:
-            return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
-        return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
+            if error:
+                return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
+            return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
+    finally:
+        _weather_check_clear_active(account_store, account_id, request.check_id)
+
+
+def _weather_check_key(account_store: AccountStore, account_id: str) -> str:
+    return f"{account_store.root}:{account_id}"
+
+
+def _weather_check_is_active(account_store: AccountStore, account_id: str) -> bool:
+    with _ACTIVE_WEATHER_CHECKS_LOCK:
+        return _weather_check_key(account_store, account_id) in _ACTIVE_WEATHER_CHECKS
+
+
+def _weather_check_mark_active(account_store: AccountStore, account_id: str, check_id: str) -> None:
+    with _ACTIVE_WEATHER_CHECKS_LOCK:
+        _ACTIVE_WEATHER_CHECKS[_weather_check_key(account_store, account_id)] = check_id
+
+
+def _weather_check_clear_active(account_store: AccountStore, account_id: str, check_id: str) -> None:
+    key = _weather_check_key(account_store, account_id)
+    with _ACTIVE_WEATHER_CHECKS_LOCK:
+        if _ACTIVE_WEATHER_CHECKS.get(key) == check_id:
+            _ACTIVE_WEATHER_CHECKS.pop(key, None)
 
 
 def _resolve_residence_city(
