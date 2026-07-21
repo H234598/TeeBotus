@@ -6450,7 +6450,7 @@ def _prepare_weather_check_unlocked(
             _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(
             city=current_city,
-            weather_text=str(weather_state.get("summary") or "").strip(),
+            weather_text=_weather_summary_text(weather_state),
             skipped_reason="rate_limited",
         )
     if _weather_check_in_progress(weather_state):
@@ -6486,7 +6486,7 @@ def _prepare_weather_check_unlocked(
             _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(
             city=current_city,
-            weather_text=str(weather_state.get("summary") or "").strip(),
+            weather_text=_weather_summary_text(weather_state),
             skipped_reason="rate_limited",
         )
     # Reserve check window before releasing lock. This preserves single-flight
@@ -6585,6 +6585,13 @@ def _weather_check_in_progress(weather_state: Mapping[str, Any]) -> bool:
     if isinstance(value, (int, float)):
         return value != 0
     return str(value or "").strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _weather_summary_text(weather_state: Mapping[str, Any]) -> str:
+    if str(weather_state.get("last_error") or "").strip():
+        return ""
+    summary = weather_state.get("summary")
+    return summary.strip() if isinstance(summary, str) else ""
 
 
 def _resolve_residence_city(
@@ -6917,7 +6924,7 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
     if not isinstance(weather_state, Mapping):
         return ""
     city = str(weather_state.get("city") or "").strip()
-    summary = str(weather_state.get("summary") or "").strip()
+    summary = _weather_summary_text(weather_state)
     checked_at = str(weather_state.get("last_checked_at") or "").strip()
     last_error = str(weather_state.get("last_error") or "").strip()
     if (

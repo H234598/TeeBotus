@@ -5797,6 +5797,33 @@ def test_string_false_check_flag_is_not_treated_as_inflight(tmp_path) -> None:
     assert result.weather_text == "Berlin: 13 C"
 
 
+def test_weather_result_hides_summary_with_error_or_invalid_type(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    for summary, last_error in (("stale weather", "provider failed"), (12345, "")):
+        state = account_store.read_agent_state(account_id)
+        state["weather_context"] = {
+            "city": "Berlin",
+            "summary": summary,
+            "last_checked_at": "2026-06-15T09:00:00+00:00",
+            "last_error": last_error,
+            "check_in_progress": False,
+        }
+        account_store.write_agent_state(account_id, state)
+
+        result = update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Hallo.",
+            now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+            provider=lambda _city: "should not run",
+        )
+
+        assert result.skipped_reason == "rate_limited"
+        assert result.weather_text == ""
+        assert weather_context_text(account_store, account_id) == ""
+
+
 def test_inflight_state_without_timestamps_is_recovered(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
