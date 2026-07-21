@@ -5412,6 +5412,22 @@ def test_weather_context_text_rejects_missing_or_invalid_check_timestamp(tmp_pat
     assert weather_context_text(account_store, account_id) == ""
 
 
+def test_weather_context_text_rejects_inflight_summary(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    state = account_store.read_agent_state(account_id)
+    state["weather_context"] = {
+        "city": "Berlin",
+        "summary": "stale weather",
+        "last_checked_at": "2026-06-15T09:00:00+00:00",
+        "last_error": "",
+        "check_in_progress": True,
+    }
+    account_store.write_agent_state(account_id, state)
+
+    assert weather_context_text(account_store, account_id) == ""
+
+
 def test_future_weather_check_timestamp_keeps_rate_limit(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
