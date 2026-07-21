@@ -4657,6 +4657,25 @@ def test_weather_context_rejects_structural_model_place(tmp_path) -> None:
     assert result.skipped_reason == "no_city"
 
 
+def test_weather_context_normalizes_or_rejects_composite_model_city() -> None:
+    assert _resolve_residence_city(
+        "Meine Adresse ist Berlin.",
+        lambda _prompt, _schema: {
+            "kind": "primary",
+            "city": "(Berlin)",
+            "confidence": 0.99,
+        },
+    ) == "Berlin"
+    assert _resolve_residence_city(
+        "Meine Adresse ist Berlin / Hamburg.",
+        lambda _prompt, _schema: {
+            "kind": "primary",
+            "city": "Berlin / Hamburg",
+            "confidence": 0.99,
+        },
+    ) == ""
+
+
 def test_weather_context_rejects_substring_model_place(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

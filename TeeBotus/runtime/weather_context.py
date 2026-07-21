@@ -6642,7 +6642,7 @@ def _resolve_residence_city(
         return ""
     if decision.kind != "primary" or decision.confidence < RESIDENCE_DECISION_MIN_CONFIDENCE:
         return ""
-    candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?")
+    candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?()[]{}\"'")
     validation_source = decision_source if long_source else source
     if (
         not candidate
@@ -6745,7 +6745,7 @@ def _candidate_only_occurs_in_temporary_context(source: str, candidate: str) -> 
 
 def _is_safe_city_candidate(city: str) -> bool:
     value = str(city or "").strip()
-    if any(mark in value for mark in ",;:!?"):
+    if any(mark in value for mark in ",;:!?/|&"):
         return False
     tokens = {
         token.strip(".()[]{}\"'")
