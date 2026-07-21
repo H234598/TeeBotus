@@ -6268,6 +6268,62 @@ _RESIDENCE_TEMPORAL_MARKERS = frozenset(
         "nachts",
     }
 )
+_FAST_PRIMARY_RESIDENCE_PREFIXES = (
+    "ich wohne in ",
+    "ich wohne bei ",
+    "ich lebe in ",
+    "ich lebe bei ",
+    "wir wohnen in ",
+    "wir wohnen bei ",
+    "wir leben in ",
+    "wir leben bei ",
+    "ich wohne jetzt in ",
+    "ich lebe jetzt in ",
+    "ich wohne aktuell in ",
+    "ich lebe aktuell in ",
+    "mein wohnort ist ",
+    "mein wohnort liegt in ",
+    "mein wohnort lautet ",
+    "mein wohnsitz ist ",
+    "mein wohnsitz liegt in ",
+    "mein zuhause ist ",
+    "mein zuhause liegt in ",
+    "mein lebensmittelpunkt ist ",
+    "mein lebensmittelpunkt liegt in ",
+)
+_FAST_NON_RESIDENTIAL_TAILS = frozenset(
+    {
+        "arbeite",
+        "arbeitete",
+        "studiere",
+        "studierte",
+        "lerne",
+        "lernte",
+        "fahre",
+        "fuhr",
+        "pendle",
+        "schlafe",
+        "schlief",
+    }
+)
+_FAST_RESIDENCE_BLOCKERS = (
+    "ab morgen",
+    "ab uebermorgen",
+    "ab übermorgen",
+    "bald ",
+    "geplant",
+    "künftig",
+    "kuenftig",
+    "zukünftig",
+    "zukuenftig",
+    "nächstes jahr",
+    "naechstes jahr",
+    "vorübergehend",
+    "voruebergehend",
+    "zeitweise",
+    "temporär",
+    "temporaer",
+)
 
 
 class _ResidenceMemoryRollbackError(RuntimeError):
@@ -6378,7 +6434,7 @@ def _resolve_residence_city(
     if not source or not _RESIDENCE_SIGNAL_RE.search(source):
         return ""
 
-    deterministic_city = extract_residence_city(source)
+    deterministic_city = _fast_primary_residence_city(source)
     tokens = {
         token.strip(".,;:!?()[]{}\"'").casefold()
         for token in source.split()
@@ -6389,6 +6445,11 @@ def _resolve_residence_city(
     if deterministic_city and _is_safe_city_candidate(deterministic_city) and not competing_labels:
         return deterministic_city
     if structured_decision_runner is None:
+        # Compatibility fallback for callers without a structured decision backend.
+        # Runtime paths with a runner must not enter this large legacy pattern set.
+        deterministic_city = extract_residence_city(source)
+        if deterministic_city and _is_safe_city_candidate(deterministic_city):
+            return deterministic_city
         return ""
 
     decision = decide_residence(source, model_runner=structured_decision_runner)
@@ -6398,6 +6459,43 @@ def _resolve_residence_city(
     if not candidate or not _is_safe_city_candidate(candidate) or not _contains_source_phrase(source, candidate):
         return ""
     return candidate
+
+
+def _fast_primary_residence_city(source: str) -> str:
+    """Extract only unambiguous residence prefixes without scanning pattern tables."""
+
+    compact = " ".join(str(source or "").strip().split())
+    lowered = compact.casefold()
+    prefix = next(
+        (candidate for candidate in _FAST_PRIMARY_RESIDENCE_PREFIXES if lowered.startswith(candidate)),
+        None,
+    )
+    if prefix is None:
+        return ""
+    if any(marker in lowered for marker in _FAST_RESIDENCE_BLOCKERS):
+        return ""
+    if len(_RESIDENCE_LABEL_RE.findall(compact)) > 1:
+        return ""
+
+    remainder = compact[len(prefix) :].strip()
+    if not remainder:
+        return ""
+    if any(marker in remainder.casefold() for marker in (" oder ", " beziehungsweise ", " entweder ", " weder ")):
+        return ""
+    if " und " in remainder.casefold():
+        tail = remainder.casefold().split(" und ", 1)[1].strip()
+        first_tail_word = tail.split(maxsplit=1)[0].strip(".,;:!?()[]{}\"'") if tail else ""
+        if first_tail_word not in _FAST_NON_RESIDENTIAL_TAILS:
+            return ""
+    if "," in remainder:
+        comma_tail = remainder.casefold().split(",", 1)[1].strip()
+        if not comma_tail.startswith("aber "):
+            return ""
+        if not any(f" {word} " in f" {comma_tail} " for word in _FAST_NON_RESIDENTIAL_TAILS):
+            return ""
+
+    city = _clean_city(remainder)
+    return city if city and _is_safe_city_candidate(city) else ""
 
 
 def _contains_source_phrase(source: str, candidate: str) -> bool:
