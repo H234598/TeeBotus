@@ -6632,7 +6632,12 @@ def _resolve_residence_city(
         return ""
     candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?")
     validation_source = decision_source if long_source else source
-    if not candidate or not _is_safe_city_candidate(candidate) or not _contains_source_phrase(validation_source, candidate):
+    if (
+        not candidate
+        or not _is_safe_city_candidate(candidate)
+        or not _contains_source_phrase(validation_source, candidate)
+        or _candidate_only_occurs_in_temporary_context(validation_source, candidate)
+    ):
         return ""
     return candidate
 
@@ -6693,6 +6698,37 @@ def _contains_source_phrase(source: str, candidate: str) -> bool:
     source_tokens = normalize(source)
     candidate_tokens = normalize(candidate)
     return bool(candidate_tokens) and f" {candidate_tokens} " in f" {source_tokens} "
+
+
+def _candidate_only_occurs_in_temporary_context(source: str, candidate: str) -> bool:
+    candidate_words = [word for word in re.findall(r"\w+", candidate.casefold()) if word]
+    if not candidate_words:
+        return False
+    candidate_pattern = re.compile(
+        rf"(?i)(?<!\w){r'\W+'.join(re.escape(word) for word in candidate_words)}(?!\w)"
+    )
+    matches = tuple(candidate_pattern.finditer(source))
+    if not matches:
+        return False
+
+    temporary_prefix = re.compile(
+        rf"(?i){_TEMPORARY_RESIDENCE_QUALIFIER}\s+(?:in|bei)?\s*$"
+    )
+    temporary_marker = re.compile(rf"(?i){_TEMPORARY_RESIDENCE_QUALIFIER}")
+
+    def is_temporary(match: re.Match[str]) -> bool:
+        prefix_clause = re.split(r"[,;.!?\n]", source[: match.start()])[-1]
+        if temporary_prefix.search(prefix_clause):
+            return True
+        sentence_tail = re.split(r"[.!?;\n]", source[match.end() :], maxsplit=1)[0]
+        marker = temporary_marker.search(sentence_tail)
+        if marker is None:
+            return False
+        before_marker = set(re.findall(r"\w+", sentence_tail[: marker.start()].casefold()))
+        after_marker = set(re.findall(r"\w+", sentence_tail[marker.end() :].casefold()))
+        return not ({"in", "bei"} & (before_marker | after_marker))
+
+    return all(is_temporary(match) for match in matches)
 
 
 def _is_safe_city_candidate(city: str) -> bool:

@@ -4585,6 +4585,36 @@ def test_weather_context_uses_structured_residence_route_for_ambiguous_text(tmp_
     assert decision_calls[0][1].__name__ == "ResidenceDecision"
 
 
+def test_model_primary_cannot_promote_temporary_city(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 12 C",
+    )
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin, aber vorübergehend in Hamburg.",
+        now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 13 C",
+        structured_decision_runner=lambda _prompt, _schema: {
+            "kind": "primary",
+            "city": "Hamburg",
+            "confidence": 0.99,
+        },
+    )
+
+    assert result.skipped_reason == "rate_limited"
+    assert calls == ["Berlin"]
+    assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
+
+
 def test_weather_context_rejects_model_place_not_present_in_message(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
