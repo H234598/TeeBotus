@@ -10676,7 +10676,13 @@ def _city_id_token(city: str) -> str:
 
 
 def _city_comparison_key(city: str) -> str:
-    return re.sub(r"\s+", " ", str(city or "").strip()).casefold()
+    return (
+        re.sub(r"\s+", " ", str(city or "").strip())
+        .casefold()
+        .replace("ä", "ae")
+        .replace("ö", "oe")
+        .replace("ü", "ue")
+    )
 
 
 def _area_name(area: Mapping[str, Any]) -> str:
