@@ -4742,6 +4742,19 @@ def test_long_ambiguous_residence_text_skips_legacy_fallback(monkeypatch) -> Non
     assert _resolve_residence_city(text, None) == ""
 
 
+def test_long_ambiguous_residence_text_is_bounded_for_structured_decision() -> None:
+    prompts: list[str] = []
+    text = "Meine Adresse ist Berlin, mein Wohnort ist Hamburg. " + ("Zusatztext " * 150)
+
+    def decision_runner(prompt: str, _schema: type[object]) -> object:
+        prompts.append(prompt)
+        return {"kind": "ambiguous", "city": "", "confidence": 0.0}
+
+    assert _resolve_residence_city(text, decision_runner) == ""
+    decision_text = prompts[0].split("Nachricht:\n", 1)[1]
+    assert len(decision_text) <= 1200
+
+
 def test_weather_context_does_not_guess_conflict_without_decision_runner(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

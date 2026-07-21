@@ -6591,13 +6591,26 @@ def _resolve_residence_city(
             return deterministic_city
         return ""
 
-    decision = decide_residence(source, model_runner=structured_decision_runner)
+    decision = decide_residence(
+        _bounded_residence_decision_text(source),
+        model_runner=structured_decision_runner,
+    )
     if decision.kind != "primary" or decision.confidence < RESIDENCE_DECISION_MIN_CONFIDENCE:
         return ""
     candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?")
     if not candidate or not _is_safe_city_candidate(candidate) or not _contains_source_phrase(source, candidate):
         return ""
     return candidate
+
+
+def _bounded_residence_decision_text(source: str) -> str:
+    if len(source) <= MAX_RESIDENCE_FALLBACK_TEXT_LENGTH:
+        return source
+    marker = "\n[...]\n"
+    available = MAX_RESIDENCE_FALLBACK_TEXT_LENGTH - len(marker)
+    left = available // 2
+    right = available - left
+    return f"{source[:left]}{marker}{source[-right:]}"
 
 
 def _fast_primary_residence_city(source: str) -> str:
