@@ -6451,7 +6451,7 @@ def _prepare_weather_check_unlocked(
             _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
         return WeatherContextResult(
             city=current_city,
-            weather_text="",
+            weather_text=str(weather_state.get("summary") or "").strip(),
             skipped_reason="rate_limited",
         )
     if _weather_check_in_progress(weather_state):
@@ -6617,10 +6617,14 @@ def _resolve_residence_city(
             return deterministic_city
         return ""
 
-    decision = decide_residence(
-        _bounded_residence_decision_text(source),
-        model_runner=structured_decision_runner,
-    )
+    try:
+        decision = decide_residence(
+            _bounded_residence_decision_text(source),
+            model_runner=structured_decision_runner,
+        )
+    except Exception:
+        # Weather context is optional. A provider outage must not break message handling.
+        return ""
     if decision.kind != "primary" or decision.confidence < RESIDENCE_DECISION_MIN_CONFIDENCE:
         return ""
     candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?")

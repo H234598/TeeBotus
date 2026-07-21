@@ -4755,6 +4755,27 @@ def test_long_ambiguous_residence_text_is_bounded_for_structured_decision() -> N
     assert len(decision_text) <= 1200
 
 
+def test_residence_provider_failure_fails_closed(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    provider_calls: list[str] = []
+
+    def failing_decision_runner(_prompt: str, _schema: type[object]) -> object:
+        raise RuntimeError("decision backend offline")
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Meine Adresse ist Berlin, mein Wohnort ist Hamburg.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: provider_calls.append(city) or f"{city}: 12 C",
+        structured_decision_runner=failing_decision_runner,
+    )
+
+    assert result.skipped_reason == "no_city"
+    assert provider_calls == []
+
+
 def test_weather_context_does_not_guess_conflict_without_decision_runner(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
@@ -5624,6 +5645,35 @@ def test_parallel_weather_updates_share_one_rate_limited_check(tmp_path) -> None
 
     assert len(calls) == 1
     assert sorted(result.checked for result in results) == [False, True]
+
+
+def test_active_marker_after_finish_keeps_fresh_weather_visible(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    state = account_store.read_agent_state(account_id)
+    state["weather_context"] = {
+        "city": "Berlin",
+        "summary": "Berlin: 12 C, frisch",
+        "last_checked_at": "2026-06-15T09:00:00+00:00",
+        "last_error": "",
+        "check_in_progress": False,
+    }
+    account_store.write_agent_state(account_id, state)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.weather_context._weather_check_is_active",
+        lambda *_args: True,
+    )
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo.",
+        now=datetime(2026, 6, 15, 9, 1, tzinfo=timezone.utc),
+        provider=lambda _city: "should not run",
+    )
+
+    assert result.skipped_reason == "rate_limited"
+    assert result.weather_text == "Berlin: 12 C, frisch"
 
 
 def test_weather_provider_does_not_hold_memory_lock_or_overwrite_new_city(tmp_path) -> None:
