@@ -5360,6 +5360,25 @@ def test_empty_weather_provider_result_is_an_error(tmp_path) -> None:
     assert weather_state["last_error"] == "empty weather summary"
 
 
+def test_non_string_weather_provider_result_is_not_persisted(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda _city: b"Berlin: 12 C",
+    )
+
+    assert result.checked is True
+    assert result.skipped_reason == "weather_error"
+    weather_state = account_store.read_agent_state(account_id)["weather_context"]
+    assert weather_state["summary"] == ""
+    assert weather_state["last_error"] == "invalid weather summary type: bytes"
+
+
 def test_incomplete_weather_payload_does_not_enter_context(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

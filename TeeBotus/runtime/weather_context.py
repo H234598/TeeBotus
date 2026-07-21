@@ -6370,7 +6370,15 @@ def update_city_and_weather_context(
 
     weather_provider = provider if provider is not None else fetch_weather_summary
     try:
-        summary = weather_provider(prepared.city).strip()
+        raw_summary = weather_provider(prepared.city)
+        if not isinstance(raw_summary, str):
+            return _finish_weather_check(
+                account_store,
+                account_id,
+                prepared,
+                error=f"invalid weather summary type: {type(raw_summary).__name__}",
+            )
+        summary = raw_summary.strip()
     except Exception as exc:
         return _finish_weather_check(
             account_store,
