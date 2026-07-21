@@ -22,6 +22,7 @@ WEATHER_CHECK_STALE_AFTER = timedelta(seconds=max(WEATHER_TIMEOUT_SECONDS * 4, 3
 _ACTIVE_WEATHER_CHECKS: dict[str, str] = {}
 _ACTIVE_WEATHER_CHECKS_LOCK = RLock()
 MAX_CITY_LENGTH = 80
+MAX_RESIDENCE_FALLBACK_TEXT_LENGTH = 1200
 _NON_CITY_RESIDENCE_NAMES = frozenset(
     {
         "deutschland",
@@ -6583,6 +6584,8 @@ def _resolve_residence_city(
     if structured_decision_runner is None:
         # Compatibility fallback for callers without a structured decision backend.
         # Runtime paths with a runner must not enter this large legacy pattern set.
+        if len(source) > MAX_RESIDENCE_FALLBACK_TEXT_LENGTH:
+            return ""
         deterministic_city = extract_residence_city(source)
         if deterministic_city and _is_safe_city_candidate(deterministic_city):
             return deterministic_city

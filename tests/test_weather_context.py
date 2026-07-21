@@ -4729,6 +4729,19 @@ def test_weather_context_clear_text_skips_legacy_pattern_scan(monkeypatch) -> No
     ) == "Berlin"
 
 
+def test_long_ambiguous_residence_text_skips_legacy_fallback(monkeypatch) -> None:
+    def fail_legacy_parser(_text: str) -> str:
+        raise AssertionError("long residence text entered legacy pattern scan")
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.weather_context.extract_residence_city",
+        fail_legacy_parser,
+    )
+
+    text = "Meine Adresse ist Berlin, mein Wohnort ist Hamburg. " + ("Zusatztext " * 150)
+    assert _resolve_residence_city(text, None) == ""
+
+
 def test_weather_context_does_not_guess_conflict_without_decision_runner(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
