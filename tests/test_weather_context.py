@@ -5034,6 +5034,34 @@ def test_city_case_change_does_not_bypass_weather_rate_limit(tmp_path) -> None:
     assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
 
 
+def test_clock_rollback_does_not_bypass_weather_rate_limit(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    def provider(city: str) -> str:
+        calls.append(city)
+        return f"{city}: 9 C"
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=provider,
+    )
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo nach einer Uhrkorrektur.",
+        now=datetime(2026, 6, 15, 8, tzinfo=timezone.utc),
+        provider=provider,
+    )
+
+    assert result.skipped_reason == "rate_limited"
+    assert calls == ["Berlin"]
+
+
 def test_repeated_city_mention_persists_city_updated_at_when_rate_limited(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
