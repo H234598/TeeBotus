@@ -179,7 +179,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_file_artifacts.py",
     "tests/test_handlers.py",
     "tests/test_history_dispatcher_bridge.py",
-    "tests/test_history_dispatcher_provider_v2.py",
+    "tests/test_history_dispatcher_provider_v2*.py",
     "tests/test_history_dispatcher_migration.py",
     "tests/test_instance_quarantine_maintenance.py",
     "tests/test_instructions.py",
