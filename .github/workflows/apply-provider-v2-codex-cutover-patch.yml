@@ -1,0 +1,40 @@
+name: apply-provider-v2-codex-cutover-patch
+
+on:
+  pull_request:
+    paths:
+      - scripts/_patch_provider_v2_codex_cutover_once.py
+      - .github/workflows/apply-provider-v2-codex-cutover-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply exact provider-v2 Codex cutover patch
+        run: |
+          python scripts/_patch_provider_v2_codex_cutover_once.py
+          git diff --check
+          python -m compileall -q \
+            TeeBotus/admin/codex_history.py \
+            TeeBotus/history_dispatcher_provider_v2_worker.py
+      - name: Commit provider-v2 Codex cutover
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            TeeBotus/admin/codex_history.py \
+            TeeBotus/history_dispatcher_provider_v2_worker.py
+          git commit -m "feat: add explicit provider v2 Codex-History mode"
+          git push origin HEAD:${{ github.head_ref }}
