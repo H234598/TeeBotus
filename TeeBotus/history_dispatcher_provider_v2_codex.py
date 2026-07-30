@@ -88,6 +88,10 @@ def provider_v2_claim_to_legacy_item(
 ) -> dict[str, Any]:
     if not isinstance(claim, Mapping):
         raise HistoryDispatcherProtocolError("provider claim must be an object")
+    if "reconciliation_only" in claim:
+        raise HistoryDispatcherProtocolError(
+            "reconciliation-only claim cannot enter the Telegram transport adapter"
+        )
     event_id = _opaque(claim.get("event_id"), field="event_id")
     payload = claim.get("payload")
     if not isinstance(payload, Mapping):
