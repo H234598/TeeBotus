@@ -22,48 +22,36 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Scope patch to encrypted provider spool
+      - name: Apply exact one-time rebind patch
         run: |
           python - <<'PY'
+          import importlib.util
           from pathlib import Path
 
           path = Path("scripts/_patch_provider_v2_rebind_once.py")
-          source = path.read_text(encoding="utf-8")
-          old_start = '''    source = replace_once(
-              source,
-              """        return target
+          spec = importlib.util.spec_from_file_location("provider_rebind_patch", path)
+          if spec is None or spec.loader is None:
+              raise SystemExit("unable to load provider rebind patch")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          original = module.replace_once
 
-              def events(
-          """,
-          '''
-          new_start = '''    provider_spool_start = source.index("class ProviderCallbackSpool:")
-              provider_prefix = source[:provider_spool_start]
-              provider_source = source[provider_spool_start:]
-              provider_source = replace_once(
-                  provider_source,
-                  """        return target
+          def scoped_replace(source, old, new, *, label):
+              if label != "spool rewrite":
+                  return original(source, old, new, label=label)
+              marker = "class ProviderCallbackSpool:"
+              start = source.index(marker)
+              return source[:start] + original(
+                  source[start:],
+                  old,
+                  new,
+                  label=label,
+              )
 
-              def events(
-          """,
-          '''
-          old_end = '''        label="spool rewrite",
-              )
-              source = replace_once(
-          '''
-          new_end = '''        label="spool rewrite",
-              )
-              source = provider_prefix + provider_source
-              source = replace_once(
-          '''
-          if source.count(old_start) != 1 or source.count(old_end) != 1:
-              raise SystemExit("provider spool patcher anchors changed")
-          source = source.replace(old_start, new_start, 1)
-          source = source.replace(old_end, new_end, 1)
-          path.write_text(source, encoding="utf-8")
+          module.replace_once = scoped_replace
+          module.patch_bridge()
+          module.patch_worker()
           PY
-      - name: Apply exact one-time rebind patch
-        run: |
-          python scripts/_patch_provider_v2_rebind_once.py
           git diff --check
           python -m compileall -q TeeBotus tests
       - name: Commit callback rebind integration
