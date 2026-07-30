@@ -1,0 +1,36 @@
+name: apply-provider-v2-worker-inventory-patch
+
+on:
+  pull_request:
+    paths:
+      - scripts/_patch_provider_v2_worker_inventory_once.py
+      - .github/workflows/apply-provider-v2-worker-inventory-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply exact provider-v2 worker inventory patch
+        run: |
+          python scripts/_patch_provider_v2_worker_inventory_once.py
+          git diff --check
+          python -m compileall -q scripts/check_plan2_acceptance.py
+      - name: Commit worker test inventory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/check_plan2_acceptance.py
+          git commit -m "test: include provider v2 worker tests in Plan2"
+          git push origin HEAD:${{ github.head_ref }}
