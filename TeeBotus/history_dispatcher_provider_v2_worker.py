@@ -271,6 +271,10 @@ async def dispatch_provider_v2_batch(
     completed_claims = 0
 
     for claim in claims:
+        if "reconciliation_only" in claim:
+            raise ProviderV2WorkerError(
+                "reconciliation-only claim cannot enter the send worker"
+            )
         target_delivery_id = _safe_ref(
             claim.get("target_delivery_id"),
             field="target_delivery_id",
