@@ -284,6 +284,7 @@ async def dispatch_provider_v2_batch(
             worker_id=normalized_worker,
             claim_token=claim_token,
             recipient_refs=normalized_recipients,
+            previous_attempt_no=attempt_no,
             request_id=_request_id(
                 factory,
                 "register",
@@ -394,6 +395,7 @@ async def dispatch_provider_v2_batch(
                 worker_id=normalized_worker,
                 claim_token=claim_token,
                 outcomes=tuple(outcomes),
+            previous_attempt_no=attempt_no,
                 request_id=_request_id(
                     factory,
                     "record",
@@ -426,6 +428,7 @@ async def dispatch_provider_v2_batch(
             target_delivery_id=target_delivery_id,
             worker_id=normalized_worker,
             claim_token=claim_token,
+            previous_attempt_no=attempt_no,
             request_id=_request_id(
                 factory,
                 "complete",
