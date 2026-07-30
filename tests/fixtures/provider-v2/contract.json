@@ -5,6 +5,7 @@
   "target": "telegram",
   "operations": [
     "provider.v2.claim",
+    "provider.v2.reclaim",
     "provider.v2.renew",
     "provider.v2.register_recipients",
     "provider.v2.record_recipients",
@@ -17,6 +18,14 @@
     "worker_id": "teebotus-worker",
     "capability_version": "history-dispatcher-telegram-v2",
     "limit": 20,
+    "lease_seconds": 120
+  },
+  "reclaim_request": {
+    "target_delivery_id": "target_opaque",
+    "provider_id": "teebotus",
+    "worker_id": "teebotus-worker",
+    "capability_version": "history-dispatcher-telegram-v2",
+    "previous_attempt_no": 1,
     "lease_seconds": 120
   },
   "recipient_refs": [
