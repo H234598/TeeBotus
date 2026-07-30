@@ -1988,6 +1988,7 @@ def test_runtime_maintenance_skips_archive_source_fdopen_runtime_error_and_keeps
 
     def fail_broken_fdopen(fd, mode="r", *args, **kwargs):
         if fd in broken_fds and mode == "rb":
+            broken_fds.remove(fd)
             raise RuntimeError("archive source fdopen failed")
         return real_fdopen(fd, mode, *args, **kwargs)
 
