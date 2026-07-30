@@ -1,0 +1,45 @@
+name: apply-provider-v2-worker-format
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/apply-provider-v2-worker-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Normalize callback attempt indentation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("TeeBotus/history_dispatcher_provider_v2_worker.py")
+          source = path.read_text(encoding="utf-8")
+          old = "                outcomes=tuple(outcomes),\n            previous_attempt_no=attempt_no,\n"
+          new = "                outcomes=tuple(outcomes),\n                previous_attempt_no=attempt_no,\n"
+          if source.count(old) != 1:
+              raise SystemExit("worker attempt indentation anchor changed")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+          git diff --check
+          python -m compileall -q TeeBotus
+      - name: Commit formatting correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add TeeBotus/history_dispatcher_provider_v2_worker.py
+          git commit -m "style: align provider callback attempt metadata"
+          git push origin HEAD:${{ github.head_ref }}
