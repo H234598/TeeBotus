@@ -1,36 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from TeeBotus.history_dispatcher_bridge import (
-    TEEBOTUS_CAPABILITY_V2,
-    CallbackSpool,
-    HistoryDispatcherBridge,
-    HistoryDispatcherProtocolError,
+from TeeBotus.history_dispatcher_bridge import TEEBOTUS_CAPABILITY_V2
+from TeeBotus.history_dispatcher_provider_v2_codex import (
+    provider_v2_claim_to_legacy_item,
 )
 from TeeBotus.history_dispatcher_provider_v2_worker import (
     ProviderV2WorkerError,
     dispatch_provider_v2_batch,
 )
-
-
-class RecordingClient:
-    def __init__(self, response: dict[str, Any]) -> None:
-        self.response = response
-
-    async def request_async(
-        self,
-        _operation: str,
-        _body: dict[str, Any] | None = None,
-        *,
-        request_id: str | None = None,
-    ) -> dict[str, Any]:
-        assert request_id
-        return self.response
+from TeeBotus.history_dispatcher_bridge import HistoryDispatcherProtocolError
 
 
 def _reconciliation_claim() -> dict[str, Any]:
@@ -51,42 +34,26 @@ def _reconciliation_claim() -> dict[str, Any]:
         "capability_version": TEEBOTUS_CAPABILITY_V2,
         "claim_token": "token_" + "a" * 40,
         "claim_expires_at": "2026-07-31T00:05:00Z",
-        "payload": {"text": "must never be sent"},
+        "payload": {
+            "history_kind": "task_completion",
+            "text": "must never be sent",
+            "timestamp": "2026-07-31T00:00:00Z",
+            "project_id": "proj_boundary",
+            "project_label": "Boundary",
+            "source_ordinal": 1,
+        },
         "successful_recipient_refs": [],
         "open_recipient_refs": ["status_admin_primary"],
         "reconciliation_only": True,
     }
 
 
-def test_normal_claim_parser_rejects_reconciliation_only_claim(tmp_path: Path) -> None:
-    client = RecordingClient(
-        {
-            "ok": True,
-            "data": {
-                "ok": True,
-                "schema_version": 2,
-                "claims": [_reconciliation_claim()],
-            },
-        }
-    )
-    bridge = HistoryDispatcherBridge(
-        client,  # type: ignore[arg-type]
-        CallbackSpool(tmp_path / "legacy-spool"),
-    )
-
+def test_transport_adapter_rejects_reconciliation_only_claim() -> None:
     with pytest.raises(HistoryDispatcherProtocolError, match="reconciliation"):
-        asyncio.run(
-            bridge.claim_provider_v2(
-                "teebotus-worker",
-                request_id="normal-claim-must-not-reconcile",
-            )
-        )
+        provider_v2_claim_to_legacy_item(_reconciliation_claim())
 
 
 class ReconciliationBridge:
-    def __init__(self) -> None:
-        self.send_reached = False
-
     async def flush_provider_v2_spool(self) -> dict[str, int]:
         return {"delivered": 0, "failed": 0}
 
