@@ -1,0 +1,32 @@
+name: diagnose-provider-v2-codex-cutover
+
+on:
+  pull_request:
+    paths:
+      - "TeeBotus/admin/codex_history.py"
+      - "TeeBotus/history_dispatcher_provider_v2_codex.py"
+      - "TeeBotus/history_dispatcher_provider_v2_worker.py"
+      - "tests/test_history_dispatcher_provider_v2_codex_cutover.py"
+      - ".github/workflows/diagnose-provider-v2-codex-cutover.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  focused-cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependencies
+        run: |
+          python -m pip install -q -e .
+          python -m pip install -q pytest==9.1.1 cryptography
+      - name: Run focused cutover contract
+        run: |
+          python -m pytest -q \
+            tests/test_history_dispatcher_provider_v2_codex_cutover.py \
+            --tb=short
