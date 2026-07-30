@@ -1,0 +1,69 @@
+name: apply-reconciliation-boundary
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/apply-reconciliation-boundary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Enforce reconciliation-only boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          bridge = Path("TeeBotus/history_dispatcher_bridge.py")
+          source = bridge.read_text(encoding="utf-8")
+          old = """            claim = dict(raw_claim)
+            target_delivery_id = _opaque_ref(
+          """
+          new = """            claim = dict(raw_claim)
+            if "reconciliation_only" in claim:
+                raise HistoryDispatcherProtocolError(
+                    "normal provider claim must not be reconciliation-only"
+                )
+            target_delivery_id = _opaque_ref(
+          """
+          if source.count(old) != 1:
+              raise SystemExit("normal claim reconciliation anchor changed")
+          bridge.write_text(source.replace(old, new, 1), encoding="utf-8")
+
+          worker = Path("TeeBotus/history_dispatcher_provider_v2_worker.py")
+          source = worker.read_text(encoding="utf-8")
+          old = """    for claim in claims:
+        target_delivery_id = _safe_ref(
+          """
+          new = """    for claim in claims:
+        if "reconciliation_only" in claim:
+            raise ProviderV2WorkerError(
+                "reconciliation-only claim cannot enter the send worker"
+            )
+        target_delivery_id = _safe_ref(
+          """
+          if source.count(old) != 1:
+              raise SystemExit("worker reconciliation anchor changed")
+          worker.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+          git diff --check
+          python -m compileall -q TeeBotus tests
+      - name: Commit boundary enforcement
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add TeeBotus/history_dispatcher_bridge.py TeeBotus/history_dispatcher_provider_v2_worker.py
+          git commit -m "fix: keep reconciliation claims out of send path"
+          git push origin HEAD:${{ github.head_ref }}
