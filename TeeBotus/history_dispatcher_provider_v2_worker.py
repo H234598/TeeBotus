@@ -275,6 +275,7 @@ async def dispatch_provider_v2_batch(
             claim.get("target_delivery_id"),
             field="target_delivery_id",
         )
+        event_id = _safe_ref(claim.get("event_id"), field="event_id")
         attempt_no = max(1, int(claim.get("attempt_no") or 1))
         claim_token = str(claim.get("claim_token") or "")
 
@@ -379,6 +380,7 @@ async def dispatch_provider_v2_batch(
             outcomes.append(outcome)
             items.append(
                 {
+                    "event_id": event_id,
                     "target_delivery_id": target_delivery_id,
                     **outcome,
                 }
