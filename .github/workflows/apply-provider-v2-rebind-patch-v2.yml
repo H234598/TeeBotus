@@ -1,0 +1,75 @@
+name: apply-provider-v2-rebind-patch-v2
+
+on:
+  pull_request:
+    paths:
+      - scripts/_patch_provider_v2_rebind_once.py
+      - .github/workflows/apply-provider-v2-rebind-patch-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Scope patch to encrypted provider spool
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/_patch_provider_v2_rebind_once.py")
+          source = path.read_text(encoding="utf-8")
+          old_start = '''    source = replace_once(
+              source,
+              """        return target
+
+              def events(
+          """,
+          '''
+          new_start = '''    provider_spool_start = source.index("class ProviderCallbackSpool:")
+              provider_prefix = source[:provider_spool_start]
+              provider_source = source[provider_spool_start:]
+              provider_source = replace_once(
+                  provider_source,
+                  """        return target
+
+              def events(
+          """,
+          '''
+          old_end = '''        label="spool rewrite",
+              )
+              source = replace_once(
+          '''
+          new_end = '''        label="spool rewrite",
+              )
+              source = provider_prefix + provider_source
+              source = replace_once(
+          '''
+          if source.count(old_start) != 1 or source.count(old_end) != 1:
+              raise SystemExit("provider spool patcher anchors changed")
+          source = source.replace(old_start, new_start, 1)
+          source = source.replace(old_end, new_end, 1)
+          path.write_text(source, encoding="utf-8")
+          PY
+      - name: Apply exact one-time rebind patch
+        run: |
+          python scripts/_patch_provider_v2_rebind_once.py
+          git diff --check
+          python -m compileall -q TeeBotus tests
+      - name: Commit callback rebind integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add TeeBotus/history_dispatcher_bridge.py TeeBotus/history_dispatcher_provider_v2_worker.py
+          git commit -m "feat: rebind expired provider callbacks safely"
+          git push origin HEAD:${{ github.head_ref }}
