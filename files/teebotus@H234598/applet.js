@@ -285,6 +285,8 @@ TeeBotusApplet.prototype = {
     this.appletRemoved = false;
     this.spawnGeneration = 0;
     this.spawnProcesses = [];
+    this.spawnOperations = [];
+    this.activeDialogs = [];
 
     this.set_applet_icon_path(this.metadata.path + "/icon.svg");
     this.set_applet_tooltip(_("TB"));
@@ -463,6 +465,7 @@ TeeBotusApplet.prototype = {
       return item;
     }
     let maxWidth = Number(options.maxWidthEm || SUBMENU_LABEL_WIDTH_EM);
+    item._teebotusLabelMaxWidthEm = maxWidth;
     if (item.label.set_style) {
       item.label.set_style("max-width: " + String(maxWidth) + "em;");
     }
@@ -613,7 +616,8 @@ TeeBotusApplet.prototype = {
       this._populateLines(this.apiMenu.menu, apiLines, this._dynamicEmptyText(_("API-/Usage-Diagnose wird geladen.")));
     }
 
-    if (this.showProjectSection) {
+    let projectHistory = sections["Projekt-History"] || [];
+    if (this.showProjectSection && (summary.codex_history_instances || projectHistory.length)) {
       let projectHistoryLines = [];
       projectHistoryLines.push(
         "Uebersicht: Codex-History Instanzen " + String(summary.codex_history_instances || 0)
@@ -627,9 +631,12 @@ TeeBotusApplet.prototype = {
       if (dispatcherQueueLine) {
         projectHistoryLines.push(dispatcherQueueLine);
       }
-      projectHistoryLines = projectHistoryLines.concat(this._formatLines(this._problemStatusLines(sections["Projekt-History"] || []), (line) => this._formatProjectHistoryLine(line)));
+      projectHistoryLines = projectHistoryLines.concat(this._formatLines(this._problemStatusLines(projectHistory), (line) => this._formatProjectHistoryLine(line)));
       this._populateLines(this.projectMenu.menu, projectHistoryLines, _("Keine Codex-History-Statuszeilen."));
-      this._populateProjectHistoryDrilldown(sections["Projekt-History"] || []);
+      this._populateProjectHistoryDrilldown(projectHistory);
+    } else if (this.showProjectSection) {
+      this._hideLinePool(this.projectMenu.menu);
+      this._populateProjectHistoryDrilldown([]);
     }
 
     let memoryLines = [];
@@ -1040,15 +1047,66 @@ TeeBotusApplet.prototype = {
     }, this._repoPath(), { timeoutMs: 30000, maxStdoutChars: 65536, maxStderrChars: 10000 });
   },
 
+  _trackDialog: function(dialog) {
+    if (!dialog || this.appletRemoved) {
+      return false;
+    }
+    if (!Array.isArray(this.activeDialogs)) {
+      this.activeDialogs = [];
+    }
+    if (this.activeDialogs.indexOf(dialog) < 0) {
+      this.activeDialogs.push(dialog);
+    }
+    return true;
+  },
+
+  _releaseDialog: function(dialog) {
+    if (!Array.isArray(this.activeDialogs)) {
+      return;
+    }
+    let index = this.activeDialogs.indexOf(dialog);
+    if (index >= 0) {
+      this.activeDialogs.splice(index, 1);
+    }
+  },
+
+  _destroyActiveDialogs: function() {
+    let dialogs = Array.isArray(this.activeDialogs) ? this.activeDialogs.slice() : [];
+    this.activeDialogs = [];
+    for (let dialog of dialogs) {
+      try {
+        if (dialog && dialog.close) {
+          dialog.close();
+        }
+      } catch (error) {
+        try { global.logError(error); } catch (_) {}
+      }
+      try {
+        if (dialog && dialog.destroy) {
+          dialog.destroy();
+        }
+      } catch (error) {
+        try { global.logError(error); } catch (_) {}
+      }
+    }
+  },
+
   _confirmHistoryDispatcherDelete: function(itemId) {
+    if (this.appletRemoved) {
+      return;
+    }
     let dialog = new ModalDialog.ModalDialog();
+    if (!this._trackDialog(dialog)) {
+      return;
+    }
     let completed = false;
     let finish = (confirmed) => {
       if (completed) {
         return;
       }
       completed = true;
-      if (confirmed) {
+      this._releaseDialog(dialog);
+      if (confirmed && !this.appletRemoved) {
         this._runHistoryDispatcherDelete(itemId);
       }
     };
@@ -1059,11 +1117,19 @@ TeeBotusApplet.prototype = {
         {
           label: _("Abbrechen"),
           key: Clutter.KEY_Escape,
-          action: function() { dialog.close(); finish(false); }
+          action: () => {
+            if (this.appletRemoved) return;
+            dialog.close();
+            finish(false);
+          }
         },
         {
           label: _("LOESCHEN 1"),
-          action: function() { dialog.close(); finish(true); }
+          action: () => {
+            if (this.appletRemoved) return;
+            dialog.close();
+            finish(true);
+          }
         }
       ]);
       if (!dialog.open()) {
@@ -1077,6 +1143,9 @@ TeeBotusApplet.prototype = {
   },
 
   _runHistoryDispatcherDelete: function(itemId) {
+    if (this.appletRemoved) {
+      return;
+    }
     this._spawn([
       this._historyDispatcherCommand(),
       "--config",
@@ -1895,10 +1964,22 @@ TeeBotusApplet.prototype = {
     if (!item || !item.label) {
       return;
     }
+    let value = this._shortText(String(text), MAX_MENU_LINE_CHARS);
     if (item.label.set_text) {
-      item.label.set_text(String(text));
+      item.label.set_text(value);
     } else {
-      item.label.text = String(text);
+      item.label.text = value;
+    }
+    this._styleMenuItemLabel(item, {
+      maxWidthEm: Number(item._teebotusLabelMaxWidthEm || SUBMENU_LABEL_WIDTH_EM),
+      wrap: value.length > MENU_LINE_WRAP_THRESHOLD
+    });
+  },
+
+  _hideLinePool: function(menu) {
+    let pool = this._ensureLinePool(menu);
+    for (let item of pool) {
+      this._setMenuLineVisible(item, false);
     }
   },
 
@@ -2604,33 +2685,79 @@ TeeBotusApplet.prototype = {
   },
 
   _spawn: function(argv, callback, cwd, options) {
+    if (this.appletRemoved) {
+      return;
+    }
     options = options || {};
     let applet = this;
     let spawnGeneration = this.spawnGeneration;
-    let done = false;
-    let timeoutId = 0;
     let process = null;
+    let cancellable = null;
+    try {
+      cancellable = Gio.Cancellable ? new Gio.Cancellable() : null;
+    } catch (error) {
+      try { global.logError(error); } catch (_) {}
+    }
+    let operation = {
+      process: null,
+      timeoutId: 0,
+      cancellable: cancellable,
+      requestsCancelled: false,
+      done: false,
+      finish: null,
+      cancelRequests: null
+    };
+    if (!Array.isArray(this.spawnOperations)) {
+      this.spawnOperations = [];
+    }
+    this.spawnOperations.push(operation);
     let untrackProcess = () => {
       let index = applet.spawnProcesses.indexOf(process);
       if (index >= 0) {
         applet.spawnProcesses.splice(index, 1);
       }
     };
-    let finish = function(stdout, stderr, ok) {
-      if (done) {
+    let untrackOperation = () => {
+      let index = applet.spawnOperations.indexOf(operation);
+      if (index >= 0) {
+        applet.spawnOperations.splice(index, 1);
+      }
+    };
+    let cancelRequests = () => {
+      if (operation.requestsCancelled) {
         return;
       }
-      done = true;
-      if (timeoutId) {
-        Mainloop.source_remove(timeoutId);
-        timeoutId = 0;
+      operation.requestsCancelled = true;
+      try {
+        if (operation.cancellable) {
+          operation.cancellable.cancel();
+        }
+      } catch (error) {
+        try { global.logError(error); } catch (_) {}
+      }
+    };
+    let finish = function(stdout, stderr, ok) {
+      if (operation.done) {
+        return;
+      }
+      operation.done = true;
+      if (operation.timeoutId) {
+        try {
+          Mainloop.source_remove(operation.timeoutId);
+        } catch (error) {
+          try { global.logError(error); } catch (_) {}
+        }
+        operation.timeoutId = 0;
       }
       untrackProcess();
+      untrackOperation();
       if (applet.appletRemoved || applet.spawnGeneration !== spawnGeneration) {
         return;
       }
       callback(stdout, stderr, ok);
     };
+    operation.finish = finish;
+    operation.cancelRequests = cancelRequests;
     try {
       let resolvedArgv = this._resolveSpawnArgv(argv);
       let launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
@@ -2638,10 +2765,15 @@ TeeBotusApplet.prototype = {
         launcher.set_cwd(String(cwd));
       }
       process = launcher.spawnv(resolvedArgv);
+      operation.process = process;
       applet.spawnProcesses.push(process);
       let timeoutMs = Number(options.timeoutMs || 0);
       if (timeoutMs > 0) {
-        timeoutId = Mainloop.timeout_add(Math.max(250, timeoutMs), () => {
+        operation.timeoutId = Mainloop.timeout_add(Math.max(250, timeoutMs), () => {
+          if (operation.done) {
+            return false;
+          }
+          cancelRequests();
           try {
             if (process) {
               process.force_exit();
@@ -2663,7 +2795,7 @@ TeeBotusApplet.prototype = {
       let processSuccessful = false;
       let outputLimitTriggered = false;
       let stopForOutputLimit = () => {
-        if (outputLimitTriggered) {
+        if (outputLimitTriggered || operation.done) {
           return;
         }
         outputLimitTriggered = true;
@@ -2676,6 +2808,10 @@ TeeBotusApplet.prototype = {
         }
       };
       let fail = (err) => {
+        if (operation.done) {
+          return;
+        }
+        cancelRequests();
         try {
           if (process) {
             process.force_exit();
@@ -2710,15 +2846,15 @@ TeeBotusApplet.prototype = {
       };
       let readStream = (name) => {
         let state = streams[name];
-        if (done) {
+        if (operation.done) {
           return;
         }
         if (!state.stream) {
           fail("Missing " + name + " pipe");
           return;
         }
-        state.stream.read_bytes_async(SUBPROCESS_READ_CHUNK_BYTES, GLib.PRIORITY_DEFAULT, null, (stream, result) => {
-          if (done) {
+        state.stream.read_bytes_async(SUBPROCESS_READ_CHUNK_BYTES, GLib.PRIORITY_DEFAULT, operation.cancellable, (stream, result) => {
+          if (operation.done) {
             return;
           }
           try {
@@ -2756,29 +2892,30 @@ TeeBotusApplet.prototype = {
       };
       readStream("stdout");
       readStream("stderr");
-      process.wait_async(null, (proc, result) => {
+      process.wait_async(operation.cancellable, (proc, result) => {
+        if (operation.done) {
+          return;
+        }
         try {
           proc.wait_finish(result);
-          if (done) {
-            return;
-          }
           processSuccessful = proc.get_successful();
           processDone = true;
           maybeFinish();
         } catch (err) {
-          if (done) {
+          if (operation.done) {
             return;
           }
           fail(err);
         }
       });
     } catch (err) {
+      cancelRequests();
       finish("", String(err), false);
     }
   },
 
   _serviceAction: function(action) {
-    if (!this.enableServiceActions) {
+    if (this.appletRemoved || !this.enableServiceActions) {
       return;
     }
     let unit = this._runtimeUnit();
@@ -2786,6 +2923,9 @@ TeeBotusApplet.prototype = {
       return;
     }
     let run = () => {
+      if (this.appletRemoved) {
+        return;
+      }
       this._spawn(["systemctl", "--user", action, unit], (stdout, stderr, ok) => {
         this._setStatusText(ok ? _("Service action completed: ") + action : _("Service action failed: ") + (stderr || stdout));
         this._refreshStatus();
@@ -2803,14 +2943,21 @@ TeeBotusApplet.prototype = {
   },
 
   _confirmServiceAction: function(action, unit, completionCallback) {
+    if (this.appletRemoved) {
+      return;
+    }
     let dialog = new ModalDialog.ModalDialog();
+    if (!this._trackDialog(dialog)) {
+      return;
+    }
     let completed = false;
     let complete = (result) => {
       if (completed) {
         return;
       }
       completed = true;
-      if (typeof completionCallback === "function") {
+      this._releaseDialog(dialog);
+      if (!this.appletRemoved && typeof completionCallback === "function") {
         completionCallback(result === true);
       }
     };
@@ -2827,6 +2974,7 @@ TeeBotusApplet.prototype = {
         label: _("Abbrechen"),
         key: Clutter.KEY_Escape,
         action: function() {
+          if (this.appletRemoved) return;
           dialog.close();
           this._setStatusText(_("Service action cancelled."));
           complete(false);
@@ -2835,6 +2983,7 @@ TeeBotusApplet.prototype = {
       {
         label: _("Ausfuehren"),
         action: function() {
+          if (this.appletRemoved) return;
           dialog.close();
           complete(true);
         }.bind(this),
@@ -3543,11 +3692,39 @@ TeeBotusApplet.prototype = {
   on_applet_removed_from_panel: function() {
     this.appletRemoved = true;
     this.spawnGeneration += 1;
+    this._destroyActiveDialogs();
     try {
       if (this.historyDispatcherCancellable) this.historyDispatcherCancellable.cancel();
     } catch (err) {
       try { global.logError(err); } catch (_) {}
     }
+    let runningOperations = Array.isArray(this.spawnOperations) ? this.spawnOperations.slice() : [];
+    for (let operation of runningOperations) {
+      try {
+        if (operation && operation.cancelRequests) {
+          operation.cancelRequests();
+        } else if (operation && operation.cancellable) {
+          operation.cancellable.cancel();
+        }
+      } catch (err) {
+        try { global.logError(err); } catch (_) {}
+      }
+      try {
+        if (operation && operation.process) {
+          operation.process.force_exit();
+        }
+      } catch (err) {
+        try { global.logError(err); } catch (_) {}
+      }
+      try {
+        if (operation && operation.finish) {
+          operation.finish("", _("Applet removed"), false);
+        }
+      } catch (err) {
+        try { global.logError(err); } catch (_) {}
+      }
+    }
+    this.spawnOperations = [];
     let runningProcesses = this.spawnProcesses || [];
     this.spawnProcesses = [];
     for (let process of runningProcesses) {

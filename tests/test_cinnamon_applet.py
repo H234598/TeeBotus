@@ -57,16 +57,23 @@ const vm = require("vm");
 const source = require("fs").readFileSync(process.env.TEEBOTUS_APPLET_SOURCE, "utf8");
 const TextIconApplet = function() {{}};
 TextIconApplet.prototype = {{}};
-const StubPopupSubMenuItem = function(text) {{
+const StubPopupMenuItem = function(text) {{
   this.label = {{
     text: String(text),
-    set_text: function(value) {{ this.text = String(value); }}
+    style: "",
+    clutter_text: {{line_wrap: false, line_wrap_mode: null, ellipsize: null}},
+    set_text: function(value) {{ this.text = String(value); }},
+    set_style: function(value) {{ this.style = String(value); }}
   }};
   this.actor = {{
     visible: true,
     show: function() {{ this.visible = true; }},
     hide: function() {{ this.visible = false; }}
   }};
+  this.connect = function(name, callback) {{ this[name] = callback; return 1; }};
+}};
+const StubPopupSubMenuItem = function(text) {{
+  StubPopupMenuItem.call(this, text);
   this.menu = {{
     items: [],
     addMenuItem: function(item) {{ this.items.push(item); }}
@@ -79,6 +86,7 @@ const context = {{
       applet: {{ TextIconApplet: TextIconApplet }},
       modalDialog: {{}},
       popupMenu: {{
+        PopupMenuItem: StubPopupMenuItem,
         PopupSeparatorMenuItem: function() {{
           this.actor = {{
             visible: true,
@@ -1977,6 +1985,223 @@ def test_cinnamon_applet_removal_terminates_running_helpers() -> None:
     }
 
 
+def test_cinnamon_applet_removal_finishes_spawn_operation_and_cancels_io() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let removedSources = [];
+          let cancelled = 0;
+          let forced = 0;
+          let callbackCalls = 0;
+          let readCancellables = [];
+          let waitCancellable = null;
+          let timeoutCallback = null;
+          context.imports.mainloop.timeout_add = function(_milliseconds, callback) {
+            timeoutCallback = callback;
+            return 77;
+          };
+          context.imports.mainloop.source_remove = function(sourceId) { removedSources.push(sourceId); };
+          context.imports.gi.Gio.Cancellable = function() {
+            this.cancel = function() { cancelled += 1; };
+          };
+          context.imports.gi.Gio.SubprocessFlags = {STDOUT_PIPE: 1, STDERR_PIPE: 2};
+          let stream = {
+            read_bytes_async: function(_size, _priority, cancellable, _callback) {
+              readCancellables.push(cancellable);
+            }
+          };
+          let process = {
+            get_stdout_pipe: function() { return stream; },
+            get_stderr_pipe: function() { return stream; },
+            wait_async: function(cancellable, _callback) { waitCancellable = cancellable; },
+            force_exit: function() { forced += 1; }
+          };
+          context.imports.gi.Gio.SubprocessLauncher = {
+            new: function() { return {spawnv: function() { return process; }}; }
+          };
+          applet.appletRemoved = false;
+          applet.spawnGeneration = 0;
+          applet.spawnProcesses = [];
+          applet.spawnOperations = [];
+          applet.activeDialogs = [];
+          applet.historyDispatcherCancellable = null;
+          applet.statusTimer = 0;
+          applet.menu = null;
+          applet.menuManager = null;
+          applet.settings = null;
+          applet._resolveSpawnArgv = function(argv) { return argv; };
+          applet._spawn(["/bin/true"], function() { callbackCalls += 1; }, null, {timeoutMs: 1000});
+          let operation = applet.spawnOperations[0] || null;
+          let before = {
+            operationCount: applet.spawnOperations.length,
+            timeoutId: operation ? operation.timeoutId : 0,
+            cancellableWired: Boolean(
+              operation && waitCancellable === operation.cancellable
+              && readCancellables.length === 2
+              && readCancellables.every(function(value) { return value === operation.cancellable; })
+            )
+          };
+          applet.on_applet_removed_from_panel();
+          if (operation && operation.finish) {
+            operation.finish("", "", false);
+            operation.finish("", "", false);
+          }
+          if (timeoutCallback) { timeoutCallback(); }
+          return {
+            before: before,
+            operationCount: applet.spawnOperations.length,
+            processCount: applet.spawnProcesses.length,
+            removedSources: removedSources,
+            cancelled: cancelled,
+            forced: forced,
+            callbackCalls: callbackCalls
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "before": {"operationCount": 1, "timeoutId": 77, "cancellableWired": True},
+        "operationCount": 0,
+        "processCount": 0,
+        "removedSources": [77],
+        "cancelled": 1,
+        "forced": 1,
+        "callbackCalls": 0,
+    }
+
+
+def test_cinnamon_applet_spawn_rejects_new_process_after_removal() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let spawned = 0;
+          let callbackCalls = 0;
+          context.imports.gi.Gio.SubprocessFlags = {STDOUT_PIPE: 1, STDERR_PIPE: 2};
+          context.imports.gi.Gio.SubprocessLauncher = {
+            new: function() {
+              return {
+                spawnv: function() {
+                  spawned += 1;
+                  throw new Error("stop after spawn proof");
+                }
+              };
+            }
+          };
+          applet.appletRemoved = true;
+          applet.spawnGeneration = 1;
+          applet.spawnProcesses = [];
+          applet.spawnOperations = [];
+          applet._resolveSpawnArgv = function(argv) { return argv; };
+          applet._spawn(["/bin/true"], function() { callbackCalls += 1; });
+          return {
+            spawned: spawned,
+            processCount: applet.spawnProcesses.length,
+            operationCount: applet.spawnOperations.length,
+            callbackCalls: callbackCalls
+          };
+        })()
+        """
+    )
+
+    assert result == {"spawned": 0, "processCount": 0, "operationCount": 0, "callbackCalls": 0}
+
+
+def test_cinnamon_applet_dispatcher_dialog_cannot_confirm_after_teardown() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let dialogs = [];
+          let deleteCalls = 0;
+          context.imports.ui.modalDialog.ModalDialog = function() {
+            this.closed = 0;
+            this.destroyed = 0;
+            this.buttons = [];
+            this.contentLayout = {add_child: function() {}};
+            this.setButtons = function(buttons) { this.buttons = buttons; };
+            this.open = function() { return true; };
+            this.close = function() { this.closed += 1; };
+            this.destroy = function() { this.destroyed += 1; };
+            dialogs.push(this);
+          };
+          context.imports.gi.St.Label = function() {};
+          applet.appletRemoved = false;
+          applet.spawnGeneration = 0;
+          applet.spawnProcesses = [];
+          applet.spawnOperations = [];
+          applet.activeDialogs = [];
+          applet.historyDispatcherCancellable = null;
+          applet.statusTimer = 0;
+          applet.menu = null;
+          applet.menuManager = null;
+          applet.settings = null;
+          applet._runHistoryDispatcherDelete = function() { deleteCalls += 1; };
+          applet._confirmHistoryDispatcherDelete("row-1");
+          let dialog = dialogs[0];
+          let trackedBefore = applet.activeDialogs.length;
+          applet.on_applet_removed_from_panel();
+          dialog.buttons[1].action();
+          return {
+            trackedBefore: trackedBefore,
+            trackedAfter: applet.activeDialogs.length,
+            closed: dialog.closed,
+            destroyed: dialog.destroyed,
+            deleteCalls: deleteCalls
+          };
+        })()
+        """
+    )
+
+    assert result == {"trackedBefore": 1, "trackedAfter": 0, "closed": 1, "destroyed": 1, "deleteCalls": 0}
+
+
+def test_cinnamon_applet_service_dialog_cannot_complete_after_teardown() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let dialogs = [];
+          let completions = [];
+          context.imports.ui.modalDialog.ModalDialog = function() {
+            this.closed = 0;
+            this.destroyed = 0;
+            this.buttons = [];
+            this.contentLayout = {add_child: function() {}};
+            this.setButtons = function(buttons) { this.buttons = buttons; };
+            this.open = function() { return true; };
+            this.close = function() { this.closed += 1; };
+            this.destroy = function() { this.destroyed += 1; };
+            dialogs.push(this);
+          };
+          context.imports.gi.St.Label = function() {};
+          applet.appletRemoved = false;
+          applet.spawnGeneration = 0;
+          applet.spawnProcesses = [];
+          applet.spawnOperations = [];
+          applet.activeDialogs = [];
+          applet.historyDispatcherCancellable = null;
+          applet.statusTimer = 0;
+          applet.menu = null;
+          applet.menuManager = null;
+          applet.settings = null;
+          applet._confirmServiceAction("start", "teebotus.service", function(value) { completions.push(value); });
+          let dialog = dialogs[0];
+          let trackedBefore = applet.activeDialogs.length;
+          applet.on_applet_removed_from_panel();
+          dialog.buttons[1].action();
+          return {
+            trackedBefore: trackedBefore,
+            trackedAfter: applet.activeDialogs.length,
+            closed: dialog.closed,
+            destroyed: dialog.destroyed,
+            completions: completions
+          };
+        })()
+        """
+    )
+
+    assert result == {"trackedBefore": 1, "trackedAfter": 0, "closed": 1, "destroyed": 1, "completions": []}
+
+
 def test_cinnamon_applet_refreshes_existing_menu_in_place() -> None:
     result = _run_js_applet_expression(
         """
@@ -2083,6 +2308,68 @@ def test_cinnamon_applet_reuses_dynamic_line_items_between_refreshes() -> None:
     }
 
 
+def test_cinnamon_applet_pooled_line_restyles_long_text_then_short_text() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let menu = {items: [], addMenuItem: function(item) { this.items.push(item); }};
+          applet._populateLines(menu, ["x".repeat(2500)], "empty");
+          let item = menu.items[0];
+          let longState = {
+            length: item.label.text.length,
+            wrap: item.label.clutter_text.line_wrap,
+            ellipsize: item.label.clutter_text.ellipsize
+          };
+          applet._populateLines(menu, ["short"], "empty");
+          return {
+            longState: longState,
+            shortState: {
+              text: item.label.text,
+              wrap: item.label.clutter_text.line_wrap,
+              ellipsize: item.label.clutter_text.ellipsize
+            }
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "longState": {"length": 2000, "wrap": True, "ellipsize": "none"},
+        "shortState": {"text": "short", "wrap": False, "ellipsize": "end"},
+    }
+
+
+def test_cinnamon_applet_pooled_line_restyles_short_text_then_long_text() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let menu = {items: [], addMenuItem: function(item) { this.items.push(item); }};
+          applet._populateLines(menu, ["short"], "empty");
+          let item = menu.items[0];
+          let shortState = {
+            text: item.label.text,
+            wrap: item.label.clutter_text.line_wrap,
+            ellipsize: item.label.clutter_text.ellipsize
+          };
+          applet._populateLines(menu, ["y".repeat(2500)], "empty");
+          return {
+            shortState: shortState,
+            longState: {
+              length: item.label.text.length,
+              wrap: item.label.clutter_text.line_wrap,
+              ellipsize: item.label.clutter_text.ellipsize
+            }
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "shortState": {"text": "short", "wrap": False, "ellipsize": "end"},
+        "longState": {"length": 2000, "wrap": True, "ellipsize": "none"},
+    }
+
+
 def test_cinnamon_applet_dynamic_refresh_only_updates_pooled_lines() -> None:
     result = _run_js_applet_expression(
         """
@@ -2153,9 +2440,9 @@ def test_cinnamon_applet_clears_project_pools_when_history_disappears() -> None:
     result = _run_js_applet_expression(
         """
         (function() {
-          let projectLineUpdates = 0;
-          let drilldownUpdates = 0;
-          let menu = function(name) { return {name: name, addMenuItem: function() {}}; };
+          let menu = function(name) {
+            return {name: name, items: [], addMenuItem: function(item) { this.items.push(item); }};
+          };
           applet.statusMenu = {menu: menu("status")};
           applet.runtimeMenu = {menu: menu("runtime")};
           applet.messengerMenu = {menu: menu("messenger")};
@@ -2165,24 +2452,35 @@ def test_cinnamon_applet_clears_project_pools_when_history_disappears() -> None:
           applet.bibliothekarMenu = {menu: menu("bibliothekar")};
           applet.proactiveMenu = {menu: menu("proactive")};
           applet.projectMenu = {menu: menu("project")};
-          applet.statusPayload = {runtime: {summary: {}, sections: {"Projekt-History": []}}};
           applet.showHistoryDispatcherSection = false;
           applet.showApiSection = false;
           applet.showProjectSection = true;
           applet.showBibliothekarSection = false;
           applet.showProactiveSection = false;
           applet.statusRunning = false;
-          applet._populateLines = function(target) {
-            if (target.name === "project") { projectLineUpdates += 1; }
+          let populateLines = applet._populateLines.bind(applet);
+          applet._populateLines = function(target, lines, emptyText) {
+            if (target.name === "project") { populateLines(target, lines, emptyText); }
           };
-          applet._populateProjectHistoryDrilldown = function() { drilldownUpdates += 1; };
+          applet.statusPayload = {
+            runtime: {summary: {codex_history_instances: 1}, sections: {"Projekt-History": []}}
+          };
           applet._populateDynamicMenus();
-          return {projectLineUpdates: projectLineUpdates, drilldownUpdates: drilldownUpdates};
+          let pool = applet.projectMenu.menu._teebotusLinePool;
+          let visibleWithHistory = pool.some(function(item) { return item.actor.visible; });
+          applet.statusPayload = {runtime: {summary: {}, sections: {"Projekt-History": []}}};
+          applet._populateDynamicMenus();
+          let drilldown = applet.projectHistoryDrilldownPool;
+          return {
+            visibleWithHistory: visibleWithHistory,
+            allLinesHidden: pool.every(function(item) { return !item.actor.visible; }),
+            drilldownHidden: !drilldown.separator.actor.visible && !drilldown.header.actor.visible
+          };
         })()
         """
     )
 
-    assert result == {"projectLineUpdates": 1, "drilldownUpdates": 1}
+    assert result == {"visibleWithHistory": True, "allLinesHidden": True, "drilldownHidden": True}
 
 
 def test_cinnamon_applet_builds_dynamic_pools_and_actions_once() -> None:
@@ -2317,9 +2615,11 @@ def test_cinnamon_applet_reuses_history_dispatcher_items() -> None:
               }
             };
           };
-          applet._actionItem = applet._menuLine;
           applet._historyDispatcherSnapshotIsStale = function() { return false; };
           applet._historyDispatcherSnapshotHasError = function() { return false; };
+          let actions = [];
+          applet._runHistoryDispatcherAction = function(action, itemId) { actions.push([action, itemId]); };
+          applet._confirmHistoryDispatcherDelete = function(itemId) { actions.push(["delete", itemId]); };
           applet.historyDispatcherError = "";
           applet.historyDispatcherPayload = {
             version: 1,
@@ -2331,17 +2631,20 @@ def test_cinnamon_applet_reuses_history_dispatcher_items() -> None:
           };
           applet._populateHistoryDispatcherMenu();
           let firstAdded = added.length;
-          applet.historyDispatcherPayload.queue_preview = [{id: "new", status: "queued"}];
+          applet.historyDispatcherPayload.queue_preview = [{id: "new", status: "failed"}];
           applet._populateHistoryDispatcherMenu();
           let pool = applet.historyDispatcherPool;
+          pool.preview[0].retry.activate();
+          pool.preview[0].remove.activate();
           return {
             removed: removed,
             firstAdded: firstAdded,
             finalAdded: added.length,
             previewSize: pool ? pool.preview.length : 0,
             previewText: pool ? pool.preview[0].line.label.text : "",
-            retryVisible: pool ? pool.preview[0].retry.actor.visible : true,
-            deleteVisible: pool ? pool.preview[0].remove.actor.visible : false
+            retryVisible: pool ? pool.preview[0].retry.actor.visible : false,
+            deleteVisible: pool ? pool.preview[0].remove.actor.visible : false,
+            actions: actions
           };
         })()
         """
@@ -2352,9 +2655,10 @@ def test_cinnamon_applet_reuses_history_dispatcher_items() -> None:
         "firstAdded": 38,
         "finalAdded": 38,
         "previewSize": 10,
-        "previewText": "Eintrag new: queued",
-        "retryVisible": False,
+        "previewText": "Eintrag new: failed",
+        "retryVisible": True,
         "deleteVisible": True,
+        "actions": [["retry", "new"], ["delete", "new"]],
     }
 
 
