@@ -354,6 +354,11 @@ def _run_telegram_polling_bridges(
                         raise TelegramRuntimeError(message) from failure
                     raise TelegramRuntimeError(message)
         if threads and not stop_event.is_set():
+            for thread in threads:
+                failure = thread_failures.get(thread_keys[thread])
+                if failure is not None:
+                    message = f"Telegram polling thread exited unexpectedly: {thread.name}"
+                    raise TelegramRuntimeError(message) from failure
             raise TelegramRuntimeError("All Telegram polling threads exited unexpectedly.")
     except KeyboardInterrupt:
         LOGGER.info("Stopping %s Telegram bot token slots.", len(threads))
