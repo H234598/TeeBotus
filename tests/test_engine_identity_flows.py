@@ -5844,7 +5844,7 @@ def test_engine_youtube_background_off_off_dispatches_finished_transcript(monkey
     assert background == [["YouTube-Transkript (lokales Whisper):\n\nLocal transcript."]]
 
 
-def test_engine_youtube_background_live_records_start_and_full_transcript(monkeypatch, tmp_path):
+def test_engine_youtube_background_live_records_each_phase_once_across_replay(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 
     class FakeRunner:
@@ -5871,11 +5871,15 @@ def test_engine_youtube_background_live_records_start_and_full_transcript(monkey
         background_action_dispatcher=lambda _event, _actions: None,
     )
 
-    engine.process(event(identity, "/youtube_transcript https://youtu.be/abc123 live ja, llm nein", channel="signal"))
+    incoming = event(identity, "/youtube_transcript https://youtu.be/abc123 live ja, llm nein", channel="signal")
+    engine.process(incoming)
+    engine.process(incoming)
 
     bot_texts = [entry["bot_text"] for entry in account_store.read_memory_entries(account_id)]
-    assert "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist. Live-Ausgabe ist aktiviert." in bot_texts
-    assert "YouTube-Transkript (lokales Whisper):\n\nFull local transcript." in bot_texts
+    assert bot_texts.count(
+        "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist. Live-Ausgabe ist aktiviert."
+    ) == 1
+    assert bot_texts.count("YouTube-Transkript (lokales Whisper):\n\nFull local transcript.") == 1
 
 
 def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):

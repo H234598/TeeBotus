@@ -2188,8 +2188,9 @@ class TeeBotusEngine:
         user_text: str,
     ) -> None:
         live_callback = self._youtube_live_action_callback(event) if live_enabled else None
+        memory_event = replace(event, event_id=f"{event.event_id}:youtube-background-result")
         actions = self._build_youtube_local_transcript_result_actions(
-            event,
+            memory_event,
             account_id,
             instructions,
             url,
