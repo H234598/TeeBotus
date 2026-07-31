@@ -57,13 +57,37 @@ const vm = require("vm");
 const source = require("fs").readFileSync(process.env.TEEBOTUS_APPLET_SOURCE, "utf8");
 const TextIconApplet = function() {{}};
 TextIconApplet.prototype = {{}};
+const StubPopupSubMenuItem = function(text) {{
+  this.label = {{
+    text: String(text),
+    set_text: function(value) {{ this.text = String(value); }}
+  }};
+  this.actor = {{
+    visible: true,
+    show: function() {{ this.visible = true; }},
+    hide: function() {{ this.visible = false; }}
+  }};
+  this.menu = {{
+    items: [],
+    addMenuItem: function(item) {{ this.items.push(item); }}
+  }};
+}};
 const context = {{
   console: console,
   imports: {{
     ui: {{
       applet: {{ TextIconApplet: TextIconApplet }},
       modalDialog: {{}},
-      popupMenu: {{}},
+      popupMenu: {{
+        PopupSeparatorMenuItem: function() {{
+          this.actor = {{
+            visible: true,
+            show: function() {{ this.visible = true; }},
+            hide: function() {{ this.visible = false; }}
+          }};
+        }},
+        PopupSubMenuMenuItem: StubPopupSubMenuItem
+      }},
       settings: {{}}
     }},
         gi: {{
@@ -93,6 +117,19 @@ const context = {{
 vm.createContext(context);
 vm.runInContext(source + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;", context);
 const applet = Object.create(context.__TeeBotusApplet.prototype);
+applet.__testMenuLine = function(text) {{
+  return {{
+    label: {{
+      text: String(text),
+      set_text: function(value) {{ this.text = String(value); }}
+    }},
+    actor: {{
+      visible: true,
+      show: function() {{ this.visible = true; }},
+      hide: function() {{ this.visible = false; }}
+    }}
+  }};
+}};
 const result = (function() {{
   return (
     {expression}
@@ -401,6 +438,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "launcher.spawnv(resolvedArgv)" in source
     assert "options = options || {};" in source
     assert "process.force_exit();" in source
+    assert "get_if_exited()" not in source
     assert "launcher.set_cwd(String(cwd))" in source
     assert "const ModalDialog = imports.ui.modalDialog;" in source
     assert "const Clutter = imports.gi.Clutter;" in source
@@ -492,7 +530,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "summary.codex_history_graphs" in source
     assert "summary.codex_history_problem_status_count" in source
     assert "fields.codex_history_repo" in source
-    assert "_appendProjectHistoryDrilldown" in source
+    assert "_populateProjectHistoryDrilldown" in source
     assert "_codexHistoryRepoDetails" in source
     assert "_codexHistoryKindLabel" in source
     assert "_formatMemoryLine" in source
@@ -1671,6 +1709,26 @@ def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
     assert result["pending"] is False
 
 
+def test_cinnamon_applet_does_not_refresh_after_removal() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let dispatcherCalls = 0;
+          let spawnCalls = 0;
+          applet.appletRemoved = true;
+          applet.statusRunning = false;
+          applet._refreshHistoryDispatcherStatus = function() { dispatcherCalls += 1; };
+          applet._setPanelState = function() {};
+          applet._spawnJson = function() { spawnCalls += 1; };
+          applet._refreshStatus();
+          return {dispatcherCalls: dispatcherCalls, spawnCalls: spawnCalls, running: applet.statusRunning};
+        })()
+        """
+    )
+
+    assert result == {"dispatcherCalls": 0, "spawnCalls": 0, "running": False}
+
+
 def test_cinnamon_applet_status_refresh_rejects_structurally_invalid_payload() -> None:
     result = _run_js_applet_expression(
         """
@@ -1871,25 +1929,52 @@ def test_cinnamon_applet_removal_terminates_running_helpers() -> None:
         """
         (function() {
           let forced = 0;
-          applet.menu = null;
+          let queried = 0;
+          let destroyed = 0;
+          let removedMenus = 0;
+          let finalized = 0;
+          applet.menu = {destroy: function() { destroyed += 1; }};
+          applet.menuManager = {removeMenu: function(menu) { removedMenus += menu === applet.menu ? 1 : 0; }};
+          applet.settings = {finalize: function() { finalized += 1; }};
+          applet.statusMenu = {};
+          applet.historyDispatcherCancellable = null;
           applet.statusTimer = 0;
           applet.spawnGeneration = 0;
           applet.spawnProcesses = [
-            {get_if_exited: function() { return false; }, force_exit: function() { forced += 1; }},
-            {get_if_exited: function() { return true; }, force_exit: function() { forced += 1; }}
+            {get_if_exited: function() { queried += 1; return false; }, force_exit: function() { forced += 1; }},
+            {get_if_exited: function() { queried += 1; return true; }, force_exit: function() { forced += 1; }}
           ];
           applet.on_applet_removed_from_panel();
           return {
             forced: forced,
+            queried: queried,
             remaining: applet.spawnProcesses.length,
             removed: applet.appletRemoved,
-            generation: applet.spawnGeneration
+            generation: applet.spawnGeneration,
+            destroyed: destroyed,
+            removedMenus: removedMenus,
+            finalized: finalized,
+            menuReleased: applet.menu === null,
+            settingsReleased: applet.settings === null,
+            submenuReleased: applet.statusMenu === null
           };
         })()
         """
     )
 
-    assert result == {"forced": 1, "remaining": 0, "removed": True, "generation": 1}
+    assert result == {
+        "forced": 2,
+        "queried": 0,
+        "remaining": 0,
+        "removed": True,
+        "generation": 1,
+        "destroyed": 1,
+        "removedMenus": 1,
+        "finalized": 1,
+        "menuReleased": True,
+        "settingsReleased": True,
+        "submenuReleased": True,
+    }
 
 
 def test_cinnamon_applet_refreshes_existing_menu_in_place() -> None:
@@ -1920,7 +2005,357 @@ def test_cinnamon_applet_refreshes_existing_menu_in_place() -> None:
         """
     )
 
-    assert result == ["static", "dynamic", "header"]
+    assert result == ["dynamic", "header"]
+
+
+def test_cinnamon_applet_skips_unchanged_menu_snapshot() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let calls = [];
+          for (let name of ["statusMenu", "runtimeMenu", "historyDispatcherMenu", "messengerMenu", "llmMenu", "apiMenu", "memoryMenu", "bibliothekarMenu", "proactiveMenu", "actionsMenu", "quickCommandsMenu", "projectMenu"]) {
+            applet[name] = {};
+          }
+          applet.menu = {};
+          applet.statusPayload = {ok: true, runtime: {summary: {instances: 1}}};
+          applet.historyDispatcherPayload = {queued: 0};
+          applet.historyDispatcherError = "";
+          applet.statusText = "stable";
+          applet._populateDynamicMenus = function() { calls.push("dynamic"); };
+          applet._updateHeader = function() { calls.push("header"); };
+          applet._refreshMenuContents();
+          applet._refreshMenuContents();
+          return calls;
+        })()
+        """
+    )
+
+    assert result == ["dynamic", "header"]
+
+
+def test_cinnamon_applet_reuses_dynamic_line_items_between_refreshes() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let created = 0;
+          let removed = 0;
+          let added = [];
+          let menu = {
+            removeAll: function() { removed += 1; },
+            addMenuItem: function(item) { added.push(item); }
+          };
+          applet._menuLine = function(text) {
+            created += 1;
+            return {
+              label: {
+                text: String(text),
+                set_text: function(value) { this.text = String(value); }
+              },
+              actor: {
+                visible: true,
+                show: function() { this.visible = true; },
+                hide: function() { this.visible = false; }
+              }
+            };
+          };
+          applet._populateLines(menu, ["alpha", "beta"], "empty");
+          let firstCreated = created;
+          applet._populateLines(menu, ["gamma"], "empty");
+          return {
+            removed: removed,
+            firstCreated: firstCreated,
+            finalCreated: created,
+            added: added.length,
+            firstText: added[0].label.text,
+            secondVisible: added[1].actor.visible
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "removed": 0,
+        "firstCreated": 15,
+        "finalCreated": 15,
+        "added": 15,
+        "firstText": "gamma",
+        "secondVisible": False,
+    }
+
+
+def test_cinnamon_applet_dynamic_refresh_only_updates_pooled_lines() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let directAdds = 0;
+          let appended = 0;
+          let appendedDrilldown = 0;
+          let populatedDrilldown = 0;
+          let codexUsageActions = 0;
+          let qdrantActions = 0;
+          let populated = 0;
+          let menu = function() {
+            return {addMenuItem: function() { directAdds += 1; }};
+          };
+          applet.statusMenu = {menu: menu()};
+          applet.runtimeMenu = {menu: menu()};
+          applet.messengerMenu = {menu: menu()};
+          applet.llmMenu = {menu: menu()};
+          applet.apiMenu = {menu: menu()};
+          applet.memoryMenu = {menu: menu()};
+          applet.bibliothekarMenu = {menu: menu()};
+          applet.proactiveMenu = {menu: menu()};
+          applet.projectMenu = {menu: menu()};
+          applet.statusPayload = {
+            runtime: {
+              summary: {codex_history_instances: 1},
+              sections: {"Projekt-History": []}
+            }
+          };
+          applet.showHistoryDispatcherSection = false;
+          applet.showApiSection = true;
+          applet.showProjectSection = true;
+          applet.showBibliothekarSection = true;
+          applet.showProactiveSection = true;
+          applet.statusRunning = false;
+          applet._populateLines = function() { populated += 1; };
+          applet._appendLines = function() { appended += 1; };
+          applet._appendProjectHistoryDrilldown = function() { appendedDrilldown += 1; };
+          applet._populateProjectHistoryDrilldown = function() { populatedDrilldown += 1; };
+          applet._appendCodexUsageActions = function() { codexUsageActions += 1; };
+          applet._appendQdrantActions = function() { qdrantActions += 1; };
+          applet._populateDynamicMenus();
+          return {
+            directAdds: directAdds,
+            appended: appended,
+            appendedDrilldown: appendedDrilldown,
+            populatedDrilldown: populatedDrilldown,
+            codexUsageActions: codexUsageActions,
+            qdrantActions: qdrantActions,
+            populated: populated
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "directAdds": 0,
+        "appended": 0,
+        "appendedDrilldown": 0,
+        "populatedDrilldown": 1,
+        "codexUsageActions": 0,
+        "qdrantActions": 0,
+        "populated": 9,
+    }
+
+
+def test_cinnamon_applet_clears_project_pools_when_history_disappears() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let projectLineUpdates = 0;
+          let drilldownUpdates = 0;
+          let menu = function(name) { return {name: name, addMenuItem: function() {}}; };
+          applet.statusMenu = {menu: menu("status")};
+          applet.runtimeMenu = {menu: menu("runtime")};
+          applet.messengerMenu = {menu: menu("messenger")};
+          applet.llmMenu = {menu: menu("llm")};
+          applet.apiMenu = {menu: menu("api")};
+          applet.memoryMenu = {menu: menu("memory")};
+          applet.bibliothekarMenu = {menu: menu("bibliothekar")};
+          applet.proactiveMenu = {menu: menu("proactive")};
+          applet.projectMenu = {menu: menu("project")};
+          applet.statusPayload = {runtime: {summary: {}, sections: {"Projekt-History": []}}};
+          applet.showHistoryDispatcherSection = false;
+          applet.showApiSection = false;
+          applet.showProjectSection = true;
+          applet.showBibliothekarSection = false;
+          applet.showProactiveSection = false;
+          applet.statusRunning = false;
+          applet._populateLines = function(target) {
+            if (target.name === "project") { projectLineUpdates += 1; }
+          };
+          applet._populateProjectHistoryDrilldown = function() { drilldownUpdates += 1; };
+          applet._populateDynamicMenus();
+          return {projectLineUpdates: projectLineUpdates, drilldownUpdates: drilldownUpdates};
+        })()
+        """
+    )
+
+    assert result == {"projectLineUpdates": 1, "drilldownUpdates": 1}
+
+
+def test_cinnamon_applet_builds_dynamic_pools_and_actions_once() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let pools = [];
+          let codexUsageActions = 0;
+          let qdrantActions = 0;
+          let menu = function(name) {
+            return {
+              name: name,
+              removeAll: function() {},
+              addMenuItem: function() {}
+            };
+          };
+          applet.statusMenu = {menu: menu("status")};
+          applet.runtimeMenu = {menu: menu("runtime")};
+          applet.historyDispatcherMenu = {menu: menu("dispatcher")};
+          applet.messengerMenu = {menu: menu("messenger")};
+          applet.llmMenu = {menu: menu("llm")};
+          applet.apiMenu = {menu: menu("api")};
+          applet.memoryMenu = {menu: menu("memory")};
+          applet.bibliothekarMenu = {menu: menu("bibliothekar")};
+          applet.proactiveMenu = {menu: menu("proactive")};
+          applet.actionsMenu = {menu: menu("actions")};
+          applet.quickCommandsMenu = {menu: menu("quick")};
+          applet.projectMenu = {menu: menu("project")};
+          applet.showHistoryDispatcherSection = false;
+          applet.enableServiceActions = true;
+          applet.proactiveInstance = "test";
+          applet._actionItem = function() { return {}; };
+          applet._ensureLinePool = function(value) { pools.push(value.name); return []; };
+          applet._appendCodexUsageActions = function() { codexUsageActions += 1; };
+          applet._appendQdrantActions = function() { qdrantActions += 1; };
+          applet._populateStaticMenus();
+          return {
+            pools: pools,
+            codexUsageActions: codexUsageActions,
+            qdrantActions: qdrantActions
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "pools": [
+            "status",
+            "runtime",
+            "messenger",
+            "llm",
+            "api",
+            "memory",
+            "bibliothekar",
+            "proactive",
+            "project",
+        ],
+        "codexUsageActions": 1,
+        "qdrantActions": 1,
+    }
+
+
+def test_cinnamon_applet_reuses_project_drilldown_submenus() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let rootItems = [];
+          let repoSnapshots = [
+            [
+              {repo: "one", instance: "a", status: "ok", queueLabel: "offen", queued: 1, failed: 0, total: 1, mix: "Runs 1", latest: "first"},
+              {repo: "two", instance: "b", status: "warning", queueLabel: "offen", queued: 2, failed: 1, total: 3, mix: "Runs 2", latest: "second"}
+            ],
+            [
+              {repo: "updated", instance: "c", status: "ok", queueLabel: "offen", queued: 0, failed: 0, total: 4, mix: "Runs 4", latest: "new"}
+            ]
+          ];
+          let snapshot = 0;
+          applet.projectMenu = {menu: {addMenuItem: function(item) { rootItems.push(item); }}};
+          applet._menuLine = function(text) {
+            return {
+              label: {text: String(text), set_text: function(value) { this.text = String(value); }},
+              actor: {
+                visible: true,
+                show: function() { this.visible = true; },
+                hide: function() { this.visible = false; }
+              }
+            };
+          };
+          applet._styleSubmenu = function() {};
+          applet._codexHistoryRepoDetails = function() { return repoSnapshots[snapshot++]; };
+          applet._populateProjectHistoryDrilldown([]);
+          let firstRootCount = rootItems.length;
+          applet._populateProjectHistoryDrilldown([]);
+          let pool = applet.projectHistoryDrilldownPool;
+          return {
+            firstRootCount: firstRootCount,
+            finalRootCount: rootItems.length,
+            poolSize: pool ? pool.items.length : 0,
+            firstLabel: pool ? pool.items[0].item.label.text : "",
+            secondVisible: pool ? pool.items[1].item.actor.visible : true
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "firstRootCount": 17,
+        "finalRootCount": 17,
+        "poolSize": 14,
+        "firstLabel": "Repo updated (c)",
+        "secondVisible": False,
+    }
+
+
+def test_cinnamon_applet_reuses_history_dispatcher_items() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let added = [];
+          let removed = 0;
+          applet.historyDispatcherMenu = {menu: {
+            addMenuItem: function(item) { added.push(item); },
+            removeAll: function() { removed += 1; }
+          }};
+          applet._menuLine = function(text) {
+            return {
+              label: {text: String(text), set_text: function(value) { this.text = String(value); }},
+              actor: {
+                visible: true,
+                show: function() { this.visible = true; },
+                hide: function() { this.visible = false; }
+              }
+            };
+          };
+          applet._actionItem = applet._menuLine;
+          applet._historyDispatcherSnapshotIsStale = function() { return false; };
+          applet._historyDispatcherSnapshotHasError = function() { return false; };
+          applet.historyDispatcherError = "";
+          applet.historyDispatcherPayload = {
+            version: 1,
+            queued: 1,
+            total: 1,
+            collector: {enabled: true, sources: 1},
+            dispatch: {enabled: true, paused: false},
+            queue_preview: [{id: "old", status: "failed"}]
+          };
+          applet._populateHistoryDispatcherMenu();
+          let firstAdded = added.length;
+          applet.historyDispatcherPayload.queue_preview = [{id: "new", status: "queued"}];
+          applet._populateHistoryDispatcherMenu();
+          let pool = applet.historyDispatcherPool;
+          return {
+            removed: removed,
+            firstAdded: firstAdded,
+            finalAdded: added.length,
+            previewSize: pool ? pool.preview.length : 0,
+            previewText: pool ? pool.preview[0].line.label.text : "",
+            retryVisible: pool ? pool.preview[0].retry.actor.visible : true,
+            deleteVisible: pool ? pool.preview[0].remove.actor.visible : false
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "removed": 0,
+        "firstAdded": 38,
+        "finalAdded": 38,
+        "previewSize": 10,
+        "previewText": "Eintrag new: queued",
+        "retryVisible": False,
+        "deleteVisible": True,
+    }
 
 
 def test_cinnamon_applet_dispatcher_last_error_is_not_reported_ready() -> None:
@@ -1943,10 +2378,11 @@ def test_cinnamon_applet_dispatcher_last_error_is_not_reported_ready() -> None:
             dispatch: {}
           };
           applet.historyDispatcherError = "";
-          applet._menuLine = function(text) { return String(text); };
+          applet._menuLine = applet.__testMenuLine;
+          applet._actionItem = applet.__testMenuLine;
           applet._shortText = function(text) { return String(text); };
           applet._populateHistoryDispatcherMenu();
-          return lines;
+          return lines.filter(function(item) { return item.label && item.actor.visible; }).map(function(item) { return item.label.text; });
         })()
         """
     )
@@ -1974,10 +2410,11 @@ def test_cinnamon_applet_dispatcher_snapshot_read_error_is_not_reported_ready() 
             dispatch: {}
           };
           applet.historyDispatcherError = "Ungültiger Dispatcher-Snapshot";
-          applet._menuLine = function(text) { return String(text); };
+          applet._menuLine = applet.__testMenuLine;
+          applet._actionItem = applet.__testMenuLine;
           applet._shortText = function(text) { return String(text); };
           applet._populateHistoryDispatcherMenu();
-          return lines;
+          return lines.filter(function(item) { return item.label && item.actor.visible; }).map(function(item) { return item.label.text; });
         })()
         """
     )
@@ -2005,10 +2442,11 @@ def test_cinnamon_applet_dispatcher_malformed_ok_is_not_reported_ready() -> None
             dispatch: {}
           };
           applet.historyDispatcherError = "";
-          applet._menuLine = function(text) { return String(text); };
+          applet._menuLine = applet.__testMenuLine;
+          applet._actionItem = applet.__testMenuLine;
           applet._shortText = function(text) { return String(text); };
           applet._populateHistoryDispatcherMenu();
-          return lines;
+          return lines.filter(function(item) { return item.label && item.actor.visible; }).map(function(item) { return item.label.text; });
         })()
         """
     )
@@ -2035,10 +2473,11 @@ def test_cinnamon_applet_dispatcher_future_timestamp_is_not_reported_ready() -> 
             dispatch: {}
           };
           applet.historyDispatcherError = "";
-          applet._menuLine = function(text) { return String(text); };
+          applet._menuLine = applet.__testMenuLine;
+          applet._actionItem = applet.__testMenuLine;
           applet._shortText = function(text) { return String(text); };
           applet._populateHistoryDispatcherMenu();
-          return lines;
+          return lines.filter(function(item) { return item.label && item.actor.visible; }).map(function(item) { return item.label.text; });
         })()
         """
     )
@@ -2066,10 +2505,11 @@ def test_cinnamon_applet_dispatcher_malformed_sections_are_not_reported_ready() 
             queue_preview: []
           };
           applet.historyDispatcherError = "";
-          applet._menuLine = function(text) { return String(text); };
+          applet._menuLine = applet.__testMenuLine;
+          applet._actionItem = applet.__testMenuLine;
           applet._shortText = function(text) { return String(text); };
           applet._populateHistoryDispatcherMenu();
-          return lines;
+          return lines.filter(function(item) { return item.label && item.actor.visible; }).map(function(item) { return item.label.text; });
         })()
         """
     )
@@ -2097,10 +2537,11 @@ def test_cinnamon_applet_dispatcher_string_booleans_are_not_reported_ready() -> 
             queue_preview: []
           };
           applet.historyDispatcherError = "";
-          applet._menuLine = function(text) { return String(text); };
+          applet._menuLine = applet.__testMenuLine;
+          applet._actionItem = applet.__testMenuLine;
           applet._shortText = function(text) { return String(text); };
           applet._populateHistoryDispatcherMenu();
-          return lines;
+          return lines.filter(function(item) { return item.label && item.actor.visible; }).map(function(item) { return item.label.text; });
         })()
         """
     )

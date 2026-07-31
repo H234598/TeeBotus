@@ -280,6 +280,7 @@ TeeBotusApplet.prototype = {
     this.statusTimer = 0;
     this.statusRunning = false;
     this.statusRefreshPending = false;
+    this.menuRenderFingerprint = "";
     this.lastError = "";
     this.appletRemoved = false;
     this.spawnGeneration = 0;
@@ -355,9 +356,27 @@ TeeBotusApplet.prototype = {
       this._buildMenu();
       return;
     }
-    this._populateStaticMenus();
+    let fingerprint = this._menuContentFingerprint();
+    if (fingerprint === this.menuRenderFingerprint) {
+      return;
+    }
     this._populateDynamicMenus();
     this._updateHeader();
+    this.menuRenderFingerprint = fingerprint;
+  },
+
+  _menuContentFingerprint: function() {
+    try {
+      return JSON.stringify([
+        this.statusPayload || null,
+        String(this.statusText || ""),
+        String(this.lastError || ""),
+        this.historyDispatcherPayload || null,
+        String(this.historyDispatcherError || "")
+      ]);
+    } catch (error) {
+      return "unserializable:" + String(error);
+    }
   },
 
   _buildMenu: function() {
@@ -401,6 +420,7 @@ TeeBotusApplet.prototype = {
     this._populateStaticMenus();
     this._populateDynamicMenus();
     this._updateHeader();
+    this.menuRenderFingerprint = this._menuContentFingerprint();
   },
 
   _applyMenuLayout: function() {
@@ -469,6 +489,8 @@ TeeBotusApplet.prototype = {
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Qdrant-Status im Terminal"), () => this._openQdrantStatusTerminal()));
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Status JSON kopieren"), () => this._copyStatusJson()));
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Applet-Einstellungen"), () => this._openAppletSettings()));
+    this.statusMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this._ensureLinePool(this.statusMenu.menu);
     if (this.showHistoryDispatcherSection) {
       this.historyDispatcherMenu.menu.removeAll();
       this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Status aktualisieren"), () => this._refreshHistoryDispatcherStatus()));
@@ -478,6 +500,19 @@ TeeBotusApplet.prototype = {
       this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Dienst neu starten"), () => this._runHistoryDispatcherAction("service-restart")));
       this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Dienst stoppen"), () => this._runHistoryDispatcherAction("service-stop")));
     }
+
+    this.runtimeMenu.menu.removeAll();
+    this._ensureLinePool(this.runtimeMenu.menu);
+    this.messengerMenu.menu.removeAll();
+    this._ensureLinePool(this.messengerMenu.menu);
+    this.llmMenu.menu.removeAll();
+    this._ensureLinePool(this.llmMenu.menu);
+    this.apiMenu.menu.removeAll();
+    this._ensureLinePool(this.apiMenu.menu);
+    this._appendCodexUsageActions();
+    this.memoryMenu.menu.removeAll();
+    this._ensureLinePool(this.memoryMenu.menu);
+    this._appendQdrantActions();
 
     this.actionsMenu.menu.removeAll();
     if (!this.enableServiceActions) {
@@ -494,11 +529,15 @@ TeeBotusApplet.prototype = {
     this.bibliothekarMenu.menu.addMenuItem(this._actionItem(_("Bibliothekar-Status im Terminal"), () => this._openBibliothekarStatus()));
     this.bibliothekarMenu.menu.addMenuItem(this._actionItem(_("Bibliothek-Ordner öffnen"), () => this._openPath(this._libraryPath())));
     this.bibliothekarMenu.menu.addMenuItem(this._actionItem(_("Bibliothekar-Hilfe im Terminal"), () => this._openTerminalForCommand(this._repoPath(), this._pythonArgs().concat(["-m", "TeeBotus.bibliothekar", "--help"]))));
+    this.bibliothekarMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this._ensureLinePool(this.bibliothekarMenu.menu);
 
     this.proactiveMenu.menu.removeAll();
     this.proactiveMenu.menu.addMenuItem(this._actionItem(_("Proaktiv einmal ausführen"), () => this._runProactiveOnce()));
     this.proactiveMenu.menu.addMenuItem(this._actionItem(_("Proaktiv-Timer Status"), () => this._openTerminalForCommand(this._repoPath(), ["systemctl", "--user", "status", "teebotus-proactive-" + this._safeUnitToken(this.proactiveInstance) + ".timer"])));
     this.proactiveMenu.menu.addMenuItem(this._actionItem(_("Proaktiv-Logs"), () => this._openTerminalForCommand(this._repoPath(), ["journalctl", "--user", "-u", "teebotus-proactive-" + this._safeUnitToken(this.proactiveInstance) + ".service", "-n", "80", "--no-pager"])));
+    this.proactiveMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this._ensureLinePool(this.proactiveMenu.menu);
 
     this.quickCommandsMenu.menu.removeAll();
     for (let command of QUICK_COMMANDS) {
@@ -518,6 +557,8 @@ TeeBotusApplet.prototype = {
     this.projectMenu.menu.addMenuItem(this._actionItem(_("Codex-History Strategie jetzt"), () => this._openCodexHistoryStrategy()));
     this.projectMenu.menu.addMenuItem(this._actionItem(_("Codex-History Timer aktivieren"), () => this._openCodexHistoryTimerEnable()));
     this.projectMenu.menu.addMenuItem(this._actionItem(_("Codex-History Timer Status"), () => this._openCodexHistoryTimerStatus()));
+    this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this._ensureLinePool(this.projectMenu.menu);
   },
 
   _populateDynamicMenus: function() {
@@ -528,8 +569,7 @@ TeeBotusApplet.prototype = {
     let runtime = payload.runtime || {};
     let sections = runtime.sections || {};
     let summary = runtime.summary || {};
-    this.statusMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-    this._appendLines(this.statusMenu.menu, this._statusDetailLines(payload), this._dynamicEmptyText(_("Statusdaten werden geladen.")));
+    this._populateLines(this.statusMenu.menu, this._statusDetailLines(payload), this._dynamicEmptyText(_("Statusdaten werden geladen.")));
     let runtimeLines = [];
     if (summary.instances || summary.channels) {
       runtimeLines.push("Instanzen: " + String(summary.instances || "?") + " | Kanaele: " + String(summary.channels || this._channels()));
@@ -571,10 +611,9 @@ TeeBotusApplet.prototype = {
       }
       apiLines = apiLines.concat(this._formatLines(this._problemStatusLines(sections["API Keys, Limits und Kosten"] || []), (line) => this._formatApiBudgetLine(line)));
       this._populateLines(this.apiMenu.menu, apiLines, this._dynamicEmptyText(_("API-/Usage-Diagnose wird geladen.")));
-      this._appendCodexUsageActions();
     }
 
-    if (this.showProjectSection && (summary.codex_history_instances || (sections["Projekt-History"] || []).length)) {
+    if (this.showProjectSection) {
       let projectHistoryLines = [];
       projectHistoryLines.push(
         "Uebersicht: Codex-History Instanzen " + String(summary.codex_history_instances || 0)
@@ -589,9 +628,8 @@ TeeBotusApplet.prototype = {
         projectHistoryLines.push(dispatcherQueueLine);
       }
       projectHistoryLines = projectHistoryLines.concat(this._formatLines(this._problemStatusLines(sections["Projekt-History"] || []), (line) => this._formatProjectHistoryLine(line)));
-      this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-      this._appendLines(this.projectMenu.menu, projectHistoryLines, _("Keine Codex-History-Statuszeilen."));
-      this._appendProjectHistoryDrilldown(sections["Projekt-History"] || []);
+      this._populateLines(this.projectMenu.menu, projectHistoryLines, _("Keine Codex-History-Statuszeilen."));
+      this._populateProjectHistoryDrilldown(sections["Projekt-History"] || []);
     }
 
     let memoryLines = [];
@@ -619,14 +657,11 @@ TeeBotusApplet.prototype = {
     memoryLines = memoryLines.concat(this._formatLines(memoryStatusLines, (line) => this._formatMemoryLine(line)));
     memoryLines = memoryLines.concat(this._formatLines(accountStatusGroups.normal, (line) => this._formatAccountLine(line)));
     this._populateLines(this.memoryMenu.menu, memoryLines, this._dynamicEmptyText(_("Memory-Diagnose wird geladen.")));
-    this._appendQdrantActions();
     if (this.showBibliothekarSection) {
-      this.bibliothekarMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-      this._appendLines(this.bibliothekarMenu.menu, this._filterLines(sections["Lokale Dienste"] || [], ["bibliothekar="]), _("Keine Bibliothekar-Statuszeilen."));
+      this._populateLines(this.bibliothekarMenu.menu, this._filterLines(sections["Lokale Dienste"] || [], ["bibliothekar="]), _("Keine Bibliothekar-Statuszeilen."));
     }
     if (this.showProactiveSection) {
-      this.proactiveMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-      this._appendLines(this.proactiveMenu.menu, this._formatLines(sections["Agenten-Piloten"] || [], (line) => this._formatAgentPilotLine(line)), _("Keine Agenten-Pilot-Zeilen."));
+      this._populateLines(this.proactiveMenu.menu, this._formatLines(sections["Agenten-Piloten"] || [], (line) => this._formatAgentPilotLine(line)), _("Keine Agenten-Pilot-Zeilen."));
     }
   },
 
@@ -855,41 +890,104 @@ TeeBotusApplet.prototype = {
       return;
     }
     try {
-      this.historyDispatcherMenu.menu.removeAll();
       let payload = this.historyDispatcherPayload || {};
       let stale = this._historyDispatcherSnapshotIsStale(payload);
       let lastError = String(payload.last_error || "").trim();
       let hasSnapshotError = this._historyDispatcherSnapshotHasError(payload);
-      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(hasSnapshotError ? _("Status: Warnung") : (stale ? _("Status: veraltet") : _("Status: bereit")), false));
-      if (this.historyDispatcherError) {
-        this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(this._shortText(this.historyDispatcherError, 160), false));
+      let pool = this._ensureHistoryDispatcherPool();
+      this._setMenuLineText(pool.status, hasSnapshotError ? _("Status: Warnung") : (stale ? _("Status: veraltet") : _("Status: bereit")));
+      let readError = String(this.historyDispatcherError || "").trim();
+      if (readError) {
+        this._setMenuLineText(pool.error, this._shortText(readError, 160));
       }
+      this._setMenuLineVisible(pool.error, Boolean(readError));
       if (lastError) {
-        this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Letzter Fehler: ") + this._shortText(lastError, 160), false));
+        this._setMenuLineText(pool.lastError, _("Letzter Fehler: ") + this._shortText(lastError, 160));
       }
-      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Queue: ") + String(payload.queued || 0) + _(" / gesamt ") + String(payload.total || 0), false));
+      this._setMenuLineVisible(pool.lastError, Boolean(lastError));
+      this._setMenuLineText(pool.queue, _("Queue: ") + String(payload.queued || 0) + _(" / gesamt ") + String(payload.total || 0));
       let collector = payload.collector || {};
-      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Collector: ") + (collector.enabled ? _("aktiv") : _("aus")) + _(" / Sources ") + String(collector.sources || 0), false));
+      this._setMenuLineText(pool.collector, _("Collector: ") + (collector.enabled ? _("aktiv") : _("aus")) + _(" / Sources ") + String(collector.sources || 0));
       let dispatch = payload.dispatch || {};
-      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Dispatch: ") + (dispatch.paused ? _("pausiert") : (dispatch.enabled ? _("aktiv") : _("aus"))), false));
-      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Version: ") + String(payload.version || "?"), false));
+      this._setMenuLineText(pool.dispatch, _("Dispatch: ") + (dispatch.paused ? _("pausiert") : (dispatch.enabled ? _("aktiv") : _("aus"))));
+      this._setMenuLineText(pool.version, _("Version: ") + String(payload.version || "?"));
       let preview = Array.isArray(payload.queue_preview) ? payload.queue_preview : [];
-      for (let i = 0; i < preview.length && i < 10; i++) {
+      for (let i = 0; i < pool.preview.length; i++) {
         let item = preview[i] || {};
         let itemId = String(item.id || "");
-        if (!itemId) {
-          continue;
-        }
+        let entry = pool.preview[i];
+        let visible = Boolean(itemId);
+        entry.itemId = visible ? itemId : "";
         let state = String(item.status || "unknown");
-        this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Eintrag ") + this._shortText(itemId, 24) + ": " + state, false));
-        if (state === "failed") {
-          this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Retry ") + this._shortText(itemId, 20), () => this._runHistoryDispatcherAction("retry", itemId)));
+        if (visible) {
+          this._setMenuLineText(entry.line, _("Eintrag ") + this._shortText(itemId, 24) + ": " + state);
+          this._setMenuLineText(entry.retry, _("Retry ") + this._shortText(itemId, 20));
+          this._setMenuLineText(entry.remove, _("Löschen ") + this._shortText(itemId, 20));
         }
-        this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Löschen ") + this._shortText(itemId, 20), () => this._confirmHistoryDispatcherDelete(itemId)));
+        this._setMenuLineVisible(entry.line, visible);
+        this._setMenuLineVisible(entry.retry, visible && state === "failed");
+        this._setMenuLineVisible(entry.remove, visible);
       }
     } catch (error) {
       try { global.logError(error); } catch (_) {}
     }
+  },
+
+  _ensureHistoryDispatcherPool: function() {
+    let menu = this.historyDispatcherMenu.menu;
+    let existing = this.historyDispatcherPool;
+    if (existing && existing.menu === menu) {
+      return existing;
+    }
+    let separator = new PopupMenu.PopupSeparatorMenuItem();
+    menu.addMenuItem(separator);
+    let status = this._menuLine("", false);
+    let error = this._menuLine("", false);
+    let lastError = this._menuLine("", false);
+    let queue = this._menuLine("", false);
+    let collector = this._menuLine("", false);
+    let dispatch = this._menuLine("", false);
+    let version = this._menuLine("", false);
+    for (let line of [status, error, lastError, queue, collector, dispatch, version]) {
+      menu.addMenuItem(line);
+    }
+    this._setMenuLineVisible(error, false);
+    this._setMenuLineVisible(lastError, false);
+    let preview = [];
+    for (let i = 0; i < 10; i++) {
+      let entry = { itemId: "" };
+      entry.line = this._menuLine("", false);
+      entry.retry = this._actionItem("", () => {
+        if (entry.itemId) {
+          this._runHistoryDispatcherAction("retry", entry.itemId);
+        }
+      });
+      entry.remove = this._actionItem("", () => {
+        if (entry.itemId) {
+          this._confirmHistoryDispatcherDelete(entry.itemId);
+        }
+      });
+      menu.addMenuItem(entry.line);
+      menu.addMenuItem(entry.retry);
+      menu.addMenuItem(entry.remove);
+      this._setMenuLineVisible(entry.line, false);
+      this._setMenuLineVisible(entry.retry, false);
+      this._setMenuLineVisible(entry.remove, false);
+      preview.push(entry);
+    }
+    this.historyDispatcherPool = {
+      menu: menu,
+      separator: separator,
+      status: status,
+      error: error,
+      lastError: lastError,
+      queue: queue,
+      collector: collector,
+      dispatch: dispatch,
+      version: version,
+      preview: preview
+    };
+    return this.historyDispatcherPool;
   },
 
   _runHistoryDispatcherAction: function(action, itemId) {
@@ -1286,26 +1384,69 @@ TeeBotusApplet.prototype = {
     return _hasOwn(kindLabels, value) ? kindLabels[value] : value.replace(/_/g, " ");
   },
 
-  _appendProjectHistoryDrilldown: function(lines) {
+  _populateProjectHistoryDrilldown: function(lines) {
     let repos = this._codexHistoryRepoDetails(lines);
-    if (repos.length === 0) {
-      return;
+    let pool = this._ensureProjectHistoryDrilldownPool();
+    let hasRepos = repos.length > 0;
+    this._setMenuLineVisible(pool.separator, hasRepos);
+    this._setMenuLineVisible(pool.header, hasRepos);
+    for (let i = 0; i < pool.items.length; i++) {
+      let visible = i < repos.length;
+      let entry = pool.items[i];
+      if (visible) {
+        let repo = repos[i];
+        this._setMenuLineText(entry.item, this._shortText("Repo " + repo.repo + " (" + repo.instance + ")", 72));
+        this._setMenuLineText(entry.lines[0], "Status: " + this._statusWord(repo.status));
+        this._setMenuLineText(entry.lines[1], "Queue: " + repo.queueLabel + " " + String(repo.queued) + " | fehlgeschlagen " + String(repo.failed) + " | gesamt " + String(repo.total));
+        this._setMenuLineText(entry.lines[2], "Typen: " + repo.mix);
+        this._setMenuLineText(entry.lines[3], "Letzter Eintrag: " + repo.latest);
+      }
+      this._setMenuLineVisible(entry.item, visible);
     }
-    this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-    this.projectMenu.menu.addMenuItem(this._menuLine(_("Codex-History Drilldown"), false));
-    for (let i = 0; i < repos.length && i < MENU_LINE_LIMIT; i++) {
-      let repo = repos[i];
-      let item = new PopupMenu.PopupSubMenuMenuItem(this._shortText("Repo " + repo.repo + " (" + repo.instance + ")", 72));
+    let overflow = repos.length > MENU_LINE_LIMIT;
+    if (overflow) {
+      this._setMenuLineText(pool.overflow, _("Weitere Repos: ") + String(repos.length - MENU_LINE_LIMIT));
+    }
+    this._setMenuLineVisible(pool.overflow, overflow);
+  },
+
+  _ensureProjectHistoryDrilldownPool: function() {
+    let menu = this.projectMenu.menu;
+    let existing = this.projectHistoryDrilldownPool;
+    if (existing && existing.menu === menu) {
+      return existing;
+    }
+    let separator = new PopupMenu.PopupSeparatorMenuItem();
+    let header = this._menuLine(_("Codex-History Drilldown"), false);
+    this._setMenuLineVisible(separator, false);
+    this._setMenuLineVisible(header, false);
+    menu.addMenuItem(separator);
+    menu.addMenuItem(header);
+    let items = [];
+    for (let i = 0; i < MENU_LINE_LIMIT; i++) {
+      let item = new PopupMenu.PopupSubMenuMenuItem("");
       this._styleSubmenu(item);
-      item.menu.addMenuItem(this._menuLine("Status: " + this._statusWord(repo.status), false));
-      item.menu.addMenuItem(this._menuLine("Queue: " + repo.queueLabel + " " + String(repo.queued) + " | fehlgeschlagen " + String(repo.failed) + " | gesamt " + String(repo.total), false));
-      item.menu.addMenuItem(this._menuLine("Typen: " + repo.mix, false));
-      item.menu.addMenuItem(this._menuLine("Letzter Eintrag: " + repo.latest, false));
-      this.projectMenu.menu.addMenuItem(item);
+      let detailLines = [];
+      for (let detailIndex = 0; detailIndex < 4; detailIndex++) {
+        let detail = this._menuLine("", false);
+        item.menu.addMenuItem(detail);
+        detailLines.push(detail);
+      }
+      this._setMenuLineVisible(item, false);
+      menu.addMenuItem(item);
+      items.push({ item: item, lines: detailLines });
     }
-    if (repos.length > MENU_LINE_LIMIT) {
-      this.projectMenu.menu.addMenuItem(this._menuLine(_("Weitere Repos: ") + String(repos.length - MENU_LINE_LIMIT), false));
-    }
+    let overflow = this._menuLine("", false);
+    this._setMenuLineVisible(overflow, false);
+    menu.addMenuItem(overflow);
+    this.projectHistoryDrilldownPool = {
+      menu: menu,
+      separator: separator,
+      header: header,
+      items: items,
+      overflow: overflow
+    };
+    return this.projectHistoryDrilldownPool;
   },
 
   _codexHistoryRepoDetails: function(lines) {
@@ -1718,8 +1859,60 @@ TeeBotusApplet.prototype = {
   },
 
   _populateLines: function(menu, lines, emptyText) {
-    menu.removeAll();
-    this._appendLines(menu, lines, emptyText);
+    let pool = this._ensureLinePool(menu);
+    let values = (lines || []).slice(0, MENU_LINE_LIMIT);
+    if ((lines || []).length > MENU_LINE_LIMIT) {
+      values.push(_("Weitere Zeilen: ") + String(lines.length - MENU_LINE_LIMIT));
+    }
+    if (values.length === 0) {
+      values.push(emptyText);
+    }
+    for (let i = 0; i < pool.length; i++) {
+      let visible = i < values.length;
+      if (visible) {
+        this._setMenuLineText(pool[i], values[i]);
+      }
+      this._setMenuLineVisible(pool[i], visible);
+    }
+  },
+
+  _ensureLinePool: function(menu) {
+    if (Array.isArray(menu._teebotusLinePool)) {
+      return menu._teebotusLinePool;
+    }
+    let pool = [];
+    for (let i = 0; i <= MENU_LINE_LIMIT; i++) {
+      let item = this._menuLine("", false);
+      this._setMenuLineVisible(item, false);
+      menu.addMenuItem(item);
+      pool.push(item);
+    }
+    menu._teebotusLinePool = pool;
+    return pool;
+  },
+
+  _setMenuLineText: function(item, text) {
+    if (!item || !item.label) {
+      return;
+    }
+    if (item.label.set_text) {
+      item.label.set_text(String(text));
+    } else {
+      item.label.text = String(text);
+    }
+  },
+
+  _setMenuLineVisible: function(item, visible) {
+    if (!item || !item.actor) {
+      return;
+    }
+    if (visible && item.actor.show) {
+      item.actor.show();
+    } else if (!visible && item.actor.hide) {
+      item.actor.hide();
+    } else {
+      item.actor.visible = Boolean(visible);
+    }
   },
 
   _appendLines: function(menu, lines, emptyText) {
@@ -1737,6 +1930,9 @@ TeeBotusApplet.prototype = {
   },
 
   _refreshStatus: function() {
+    if (this.appletRemoved) {
+      return;
+    }
     this._refreshHistoryDispatcherStatus();
     if (this.statusRunning) {
       this.statusRefreshPending = true;
@@ -2447,7 +2643,7 @@ TeeBotusApplet.prototype = {
       if (timeoutMs > 0) {
         timeoutId = Mainloop.timeout_add(Math.max(250, timeoutMs), () => {
           try {
-            if (process && !process.get_if_exited()) {
+            if (process) {
               process.force_exit();
             }
           } catch (err) {
@@ -2472,7 +2668,7 @@ TeeBotusApplet.prototype = {
         }
         outputLimitTriggered = true;
         try {
-          if (process && !process.get_if_exited()) {
+          if (process) {
             process.force_exit();
           }
         } catch (err) {
@@ -2481,7 +2677,7 @@ TeeBotusApplet.prototype = {
       };
       let fail = (err) => {
         try {
-          if (process && !process.get_if_exited()) {
+          if (process) {
             process.force_exit();
           }
         } catch (forceError) {
@@ -3356,11 +3552,11 @@ TeeBotusApplet.prototype = {
     this.spawnProcesses = [];
     for (let process of runningProcesses) {
       try {
-        if (process && !process.get_if_exited()) {
+        if (process) {
           process.force_exit();
         }
       } catch (err) {
-        global.logError(err);
+        try { global.logError(err); } catch (_) {}
       }
     }
     this.statusRunning = false;
@@ -3371,9 +3567,41 @@ TeeBotusApplet.prototype = {
       Mainloop.source_remove(this.statusTimer);
       this.statusTimer = 0;
     }
-    if (this.menu) {
-      this.menu.destroy();
-      this.menu = null;
+    let menu = this.menu;
+    if (menu && this.menuManager && this.menuManager.removeMenu) {
+      try {
+        this.menuManager.removeMenu(menu);
+      } catch (err) {
+        try { global.logError(err); } catch (_) {}
+      }
+    }
+    if (menu) {
+      menu.destroy();
+    }
+    if (this.settings && this.settings.finalize) {
+      try {
+        this.settings.finalize();
+      } catch (err) {
+        try { global.logError(err); } catch (_) {}
+      }
+    }
+    this.menu = null;
+    this.menuManager = null;
+    this.settings = null;
+    this.historyDispatcherCancellable = null;
+    this.statusPayload = null;
+    this.historyDispatcherPayload = null;
+    this.projectHistoryDrilldownPool = null;
+    this.historyDispatcherPool = null;
+    this.headerItem = null;
+    this.summaryItem = null;
+    this.versionItem = null;
+    for (let name of [
+      "statusMenu", "runtimeMenu", "historyDispatcherMenu", "messengerMenu",
+      "llmMenu", "apiMenu", "memoryMenu", "bibliothekarMenu", "proactiveMenu",
+      "actionsMenu", "quickCommandsMenu", "projectMenu"
+    ]) {
+      this[name] = null;
     }
   }
 };
