@@ -2202,6 +2202,45 @@ def test_cinnamon_applet_service_dialog_cannot_complete_after_teardown() -> None
     assert result == {"trackedBefore": 1, "trackedAfter": 0, "closed": 1, "destroyed": 1, "completions": []}
 
 
+def test_cinnamon_applet_failed_dialog_open_destroys_unmapped_actors() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let dialogs = [];
+          let completions = [];
+          context.imports.ui.modalDialog.ModalDialog = function() {
+            this.destroyed = 0;
+            this.buttons = [];
+            this.contentLayout = {add_child: function() {}};
+            this.setButtons = function(buttons) { this.buttons = buttons; };
+            this.open = function() { return false; };
+            this.close = function() {};
+            this.destroy = function() { this.destroyed += 1; };
+            dialogs.push(this);
+          };
+          context.imports.gi.St.Label = function() {};
+          applet.appletRemoved = false;
+          applet.activeDialogs = [];
+          applet._setStatusText = function() {};
+          applet._runHistoryDispatcherDelete = function() {};
+          applet._confirmHistoryDispatcherDelete("row-1");
+          applet._confirmServiceAction(
+            "start",
+            "teebotus.service",
+            function(value) { completions.push(value); }
+          );
+          return {
+            activeDialogs: applet.activeDialogs.length,
+            destroyed: dialogs.map(function(dialog) { return dialog.destroyed; }),
+            completions: completions
+          };
+        })()
+        """
+    )
+
+    assert result == {"activeDialogs": 0, "destroyed": [1, 1], "completions": [False]}
+
+
 def test_cinnamon_applet_refreshes_existing_menu_in_place() -> None:
     result = _run_js_applet_expression(
         """

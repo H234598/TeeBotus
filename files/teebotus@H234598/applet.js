@@ -1070,24 +1070,29 @@ TeeBotusApplet.prototype = {
     }
   },
 
+  _destroyDialog: function(dialog) {
+    this._releaseDialog(dialog);
+    try {
+      if (dialog && dialog.close) {
+        dialog.close();
+      }
+    } catch (error) {
+      try { global.logError(error); } catch (_) {}
+    }
+    try {
+      if (dialog && dialog.destroy) {
+        dialog.destroy();
+      }
+    } catch (error) {
+      try { global.logError(error); } catch (_) {}
+    }
+  },
+
   _destroyActiveDialogs: function() {
     let dialogs = Array.isArray(this.activeDialogs) ? this.activeDialogs.slice() : [];
     this.activeDialogs = [];
     for (let dialog of dialogs) {
-      try {
-        if (dialog && dialog.close) {
-          dialog.close();
-        }
-      } catch (error) {
-        try { global.logError(error); } catch (_) {}
-      }
-      try {
-        if (dialog && dialog.destroy) {
-          dialog.destroy();
-        }
-      } catch (error) {
-        try { global.logError(error); } catch (_) {}
-      }
+      this._destroyDialog(dialog);
     }
   },
 
@@ -1135,10 +1140,12 @@ TeeBotusApplet.prototype = {
       if (!dialog.open()) {
         this._setStatusText(_("Dispatcher-Bestätigungsdialog konnte nicht geöffnet werden."));
         finish(false);
+        this._destroyDialog(dialog);
       }
     } catch (error) {
       try { global.logError(error); } catch (_) {}
       finish(false);
+      this._destroyDialog(dialog);
     }
   },
 
@@ -2961,37 +2968,45 @@ TeeBotusApplet.prototype = {
         completionCallback(result === true);
       }
     };
-    dialog.contentLayout.add_child(new St.Label({
-      text: _("Service action ausfuehren?"),
-      x_expand: true
-    }));
-    dialog.contentLayout.add_child(new St.Label({
-      text: String(action || "") + " " + String(unit || ""),
-      x_expand: true
-    }));
-    dialog.setButtons([
-      {
-        label: _("Abbrechen"),
-        key: Clutter.KEY_Escape,
-        action: function() {
-          if (this.appletRemoved) return;
-          dialog.close();
-          this._setStatusText(_("Service action cancelled."));
-          complete(false);
-        }.bind(this),
-      },
-      {
-        label: _("Ausfuehren"),
-        action: function() {
-          if (this.appletRemoved) return;
-          dialog.close();
-          complete(true);
-        }.bind(this),
+    try {
+      dialog.contentLayout.add_child(new St.Label({
+        text: _("Service action ausfuehren?"),
+        x_expand: true
+      }));
+      dialog.contentLayout.add_child(new St.Label({
+        text: String(action || "") + " " + String(unit || ""),
+        x_expand: true
+      }));
+      dialog.setButtons([
+        {
+          label: _("Abbrechen"),
+          key: Clutter.KEY_Escape,
+          action: function() {
+            if (this.appletRemoved) return;
+            dialog.close();
+            this._setStatusText(_("Service action cancelled."));
+            complete(false);
+          }.bind(this),
+        },
+        {
+          label: _("Ausfuehren"),
+          action: function() {
+            if (this.appletRemoved) return;
+            dialog.close();
+            complete(true);
+          }.bind(this),
+        }
+      ]);
+      if (dialog.open()) {
+        return;
       }
-    ]);
-    if (!dialog.open()) {
       this._setStatusText(_("Service confirmation dialog could not be opened."));
       complete(false);
+      this._destroyDialog(dialog);
+    } catch (error) {
+      try { global.logError(error); } catch (_) {}
+      complete(false);
+      this._destroyDialog(dialog);
     }
   },
 
